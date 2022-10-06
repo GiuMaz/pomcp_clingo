@@ -698,11 +698,11 @@ void ROCKSAMPLE::GenerateFromRules(const STATE& state, const BELIEF_STATE &belie
     int worst_rock = -1;
     double worst_guess = 2.0;
     for (int i = 0; i < RockPos.size(); i++) {
+        /*
         const auto& meta =
             dynamic_cast<const ROCKSAMPLE_METAINFO&>(belief.get_metainfo());
 
         // Belief on root, likelyhood otherwise
-        /*
         double real_val = belief.Empty()
                               ? meta.get_prob_valuable(i)
                               : rs.Rocks[i].LikelihoodValuable;
