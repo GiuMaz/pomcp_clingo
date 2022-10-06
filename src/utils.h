@@ -9,6 +9,7 @@
 #include "memorypool.h"
 #include <algorithm>
 #include <random>
+#include <chrono>
 
 #define LargeInteger 1000000
 #define Infinity 1e+10
@@ -71,4 +72,26 @@ inline bool Contains(std::vector<T>& vec, const T& item)
 void UnitTest();
 
 }
+
+constexpr int pow2(int i) { return 1 << i; }
+
+enum Classification {
+    TRUE_POSITIVE,
+    TRUE_NEGATIVE,
+    FALSE_POSITIVE,
+    FALSE_NEGATIVE
+};
+
+class Timer {
+public:
+    Timer() : start(std::chrono::steady_clock::now()) {}
+    double elapsed() const {
+        return std::chrono::duration_cast<std::chrono::seconds>(
+                std::chrono::steady_clock::now() - start).count();
+    }
+
+private:
+    std::chrono::time_point<std::chrono::steady_clock> start;
+};
+
 #endif // UTILS_H

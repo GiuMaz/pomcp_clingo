@@ -25,23 +25,31 @@ public:
     virtual STATE* CreateStartState() const;
     virtual void FreeState(STATE* state) const;
     virtual bool Step(STATE& state, int action, 
-        int& observation, double& reward) const;
+        observation_t& observation, double& reward) const;
         
     void GeneratePreferred(const STATE& state, const HISTORY& history,
         std::vector<int>& legal, const STATUS& status) const;
     virtual bool LocalMove(STATE& state, const HISTORY& history,
-        int stepObs, const STATUS& status) const;
+        observation_t stepObs, const STATUS& status) const;
 
     virtual void DisplayBeliefs(const BELIEF_STATE& beliefState, 
         std::ostream& ostr) const;
     virtual void DisplayState(const STATE& state, std::ostream& ostr) const;
-    virtual void DisplayObservation(const STATE& state, int observation, std::ostream& ostr) const;
+    virtual void DisplayObservation(const STATE& state, observation_t observation, std::ostream& ostr) const;
     virtual void DisplayAction(int action, std::ostream& ostr) const;
+
+    // xes logging
+    virtual void log_problem_info() const;
+    virtual void log_beliefs(const BELIEF_STATE& beliefState) const;
+    virtual void log_state(const STATE& state) const;
+    virtual void log_action(int action) const;
+    virtual void log_observation(const STATE& state, observation_t observation) const;
+    virtual void log_reward(double reward) const;
 
 protected:
 
     void MoveOpponent(TAG_STATE& tagstate, int opp) const;
-    int GetObservation(const TAG_STATE& tagstate, int action) const;
+    observation_t GetObservation(const TAG_STATE& tagstate, int action) const;
     bool Inside(const COORD& coord) const;
     COORD GetCoord(int index) const;
     int GetIndex(const COORD& coord) const;

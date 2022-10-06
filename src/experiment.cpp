@@ -1,5 +1,4 @@
 #include "experiment.h"
-#include "boost/timer.hpp"
 
 using namespace std;
 
@@ -18,16 +17,14 @@ EXPERIMENT::PARAMS::PARAMS()
 {
 }
 
-EXPERIMENT::EXPERIMENT(const SIMULATOR& real,
-    const SIMULATOR& simulator, const string& outputFile,
-    EXPERIMENT::PARAMS& expParams, MCTS::PARAMS& searchParams,
-    std::string file)
+EXPERIMENT::EXPERIMENT(SIMULATOR& real,
+    SIMULATOR& simulator, const string& outputFile,
+    EXPERIMENT::PARAMS& expParams, MCTS::PARAMS& searchParams)
 :   Real(real),
     Simulator(simulator),
     ExpParams(expParams),
     SearchParams(searchParams),
-    OutputFile(outputFile.c_str()),
-    logger(file)
+    OutputFile(outputFile.c_str())
 {
     if (ExpParams.AutoExploration)
     {
@@ -41,9 +38,9 @@ EXPERIMENT::EXPERIMENT(const SIMULATOR& real,
 
 void EXPERIMENT::Run()
 {
-    boost::timer timer;
+    Timer timer;
 
-    MCTS mcts(Simulator, SearchParams, logger);
+    MCTS mcts(Simulator, SearchParams);
 
     double undiscountedReturn = 0.0;
     double discountedReturn = 0.0;
@@ -52,7 +49,7 @@ void EXPERIMENT::Run()
     bool outOfParticles = false;
     int t;
 
-    if (fixed_seed) {
+    if (use_fixed_seed) {
         Real.set_seed(real_seed);
         real_seed++;
     }
@@ -63,12 +60,20 @@ void EXPERIMENT::Run()
 
     for (t = 0; t < ExpParams.NumSteps; t++)
     {
-        logger.start_event();
+        if (XES::enabled())
+            XES::logger().start_event();
 
-        int observation;
+        SIMULATOR::observation_t observation;
         double reward;
+
+        if (XES::enabled()) {
+            Simulator.log_beliefs(mcts.BeliefState());
+        }
+
         int action = mcts.SelectAction();
+
         terminal = Real.Step(*state, action, observation, reward);
+        //cout << "REAL action " <<  action << " observation " << observation << endl;
 
         Results.Reward.Add(reward);
         undiscountedReturn += reward;
@@ -82,11 +87,16 @@ void EXPERIMENT::Run()
             Real.DisplayObservation(*state, observation, cout);
             Real.DisplayReward(reward, cout);
         }
-        Real.log_action(action, logger);
-        Real.log_observation(*state, observation, logger);
-        Real.log_reward(reward, logger);
 
-        logger.end_event();
+        if (XES::enabled()) {
+            XES::logger().add_attribute({"simulation", true});
+            Real.log_action(action);
+            Real.log_observation(*state, observation);
+            Real.log_reward(reward);
+        }
+
+        if (XES::enabled())
+            XES::logger().end_event();
 
         if (terminal)
         {
@@ -111,13 +121,13 @@ void EXPERIMENT::Run()
         HISTORY history = mcts.GetHistory();
         while (++t < ExpParams.NumSteps)
         {
-            int observation;
+            SIMULATOR::observation_t observation;
             double reward;
 
             // This passes real state into simulator!
             // SelectRandom must only use fully observable state
             // to avoid "cheating"
-            int action = Simulator.SelectRandom(*state, history, mcts.GetStatus());
+            int action = Simulator.SelectRandom(*state, history, mcts.BeliefState(), mcts.GetStatus());
             terminal = Real.Step(*state, action, observation, reward);
 
             Results.Reward.Add(reward);
@@ -151,10 +161,10 @@ void EXPERIMENT::Run()
     cout << "Undiscounted return = " << undiscountedReturn
         << ", average = " << Results.UndiscountedReturn.GetMean() << endl;
 
-    logger.add_attributes({
-        {"discounted return", discountedReturn},
-        {"undiscounted return", undiscountedReturn}
-    });
+    if (XES::enabled())
+        XES::logger().add_attributes(
+            {{"discounted return", discountedReturn},
+             {"undiscounted return", undiscountedReturn}});
 }
 
 void EXPERIMENT::MultiRun()
@@ -164,14 +174,24 @@ void EXPERIMENT::MultiRun()
         cout << "Starting run " << n + 1 << " with "
              << SearchParams.NumSimulations << " simulations... " << endl;
 
-        logger.start_trace();
+        Real.pre_run();
 
-        logger.add_attributes({
-                {"run", n+1},
-                {"simulations", SearchParams.NumSimulations}
-            });
+        if (XES::enabled())
+            XES::logger().start_trace();
+
+        if (XES::enabled()) {
+            XES::logger().add_attributes(
+                {{"run", n + 1}, {"simulations", SearchParams.NumSimulations}});
+            Simulator.log_run_info();
+        }
+
         Run();
-        logger.end_trace();
+
+        if (XES::enabled())
+            XES::logger().end_trace();
+
+        Real.post_run();
+
         if (Results.Time.GetTotal() > ExpParams.TimeOut)
         {
             cout << "Timed out after " << n << " runs in "
@@ -190,13 +210,15 @@ void EXPERIMENT::DiscountedReturn()
     ExpParams.SimSteps = Simulator.GetHorizon(ExpParams.Accuracy, ExpParams.UndiscountedHorizon);
     ExpParams.NumSteps = Real.GetHorizon(ExpParams.Accuracy, ExpParams.UndiscountedHorizon);
 
-    logger.add_attributes({
+    if (XES::enabled()) {
+        XES::logger().add_attributes({
             {"MaxDepth", SearchParams.MaxDepth},
             {"SimSteps", ExpParams.SimSteps},
             {"NumSteps", ExpParams.NumSteps},
             {"shield", SearchParams.use_shield},
-            });
-    Simulator.log_problem_info(logger);
+        });
+        Simulator.log_problem_info();
+    }
 
     for (int i = ExpParams.MinDoubles; i <= ExpParams.MaxDoubles; i++)
     {
@@ -217,18 +239,20 @@ void EXPERIMENT::DiscountedReturn()
         Results.Clear();
         MultiRun();
 
-        logger.add_attributes(
-            {{"average undiscounted return",
-              Results.UndiscountedReturn.GetMean()},
-             {"average undiscounted return std",
-              Results.UndiscountedReturn.GetStdErr()},
-             {"average discounted return", Results.DiscountedReturn.GetMean()},
-             {"average discounted return std",
-              Results.DiscountedReturn.GetStdErr()},
-             {"average time", Results.Time.GetMean()},
-             {"average time std", Results.Time.GetStdDev()},
-             {"total time", Results.Time.GetTotal()}
-             });
+        if (XES::enabled()) {
+            XES::logger().add_attributes(
+                    {{"average undiscounted return",
+                    Results.UndiscountedReturn.GetMean()},
+                    {"average undiscounted return std",
+                    Results.UndiscountedReturn.GetStdErr()},
+                    {"average discounted return", Results.DiscountedReturn.GetMean()},
+                    {"average discounted return std",
+                    Results.DiscountedReturn.GetStdErr()},
+                    {"average time", Results.Time.GetMean()},
+                    {"average time std", Results.Time.GetStdDev()},
+                    {"total time", Results.Time.GetTotal()}
+                    });
+        }
 
         cout << "Simulations = " << SearchParams.NumSimulations << endl
             << "Runs = " << Results.Time.GetCount() << endl

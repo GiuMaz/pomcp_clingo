@@ -2,6 +2,8 @@
 #include "utils.h"
 #include <fstream>
 #include <sstream>
+#include <z3.h>
+#include <z3++.h>
 
 using namespace std;
 using namespace UTILS;
@@ -12,13 +14,14 @@ OBSTACLEAVOIDANCE::OBSTACLEAVOIDANCE(std::vector<int> nSubSegs, std::vector<std:
     nDifficultyValues(nDifficultyValues),
     nVelocityValues(nVelocityValues),
     nSeg(subSegLengths.size()),
-    unif_dist(0.0, 1.0)
+    unif_dist(0.0, 1.0),
+    visual()
 {
     NumActions = nEnginePowerValues; 
 
     NumObservations = 2;
-    collisionPenaltyTime=50;
-    RewardRange = 52;
+    collisionPenaltyTime=100;
+    RewardRange = 70;
     Discount = 0.95;
 }
 
@@ -28,13 +31,14 @@ OBSTACLEAVOIDANCE::OBSTACLEAVOIDANCE(std::vector<int> nSubSegs, std::vector<std:
     nDifficultyValues(nDifficultyValues),
     nVelocityValues(nVelocityValues),
     nSeg(subSegLengths.size()),
-    unif_dist(0.0, 1.0)
+    unif_dist(0.0, 1.0),
+    visual()
 {
     NumActions = nEnginePowerValues; 
 
-    NumObservations = 4;
+    NumObservations = 2;
     collisionPenaltyTime=100;
-    RewardRange = 103;
+    RewardRange = 70;
     Discount = 0.95;
 
     // shield rule
@@ -201,7 +205,7 @@ void OBSTACLEAVOIDANCE::FreeState(STATE* state) const
 
 
 bool OBSTACLEAVOIDANCE::Step(STATE& state, int action,
-        int& observation, double& reward) const
+        observation_t& observation, double& reward) const
 {
     OBSTACLEAVOIDANCE_STATE& s = safe_cast<OBSTACLEAVOIDANCE_STATE&>(state);
 
@@ -212,7 +216,6 @@ bool OBSTACLEAVOIDANCE::Step(STATE& state, int action,
     double prob_collision;
 
     // Model
-    /*
     if((action==0) && (s.segDifficulties[s.curSegI]==0)){ // Low difficulty
         prob_collision=0.0; // 0.0
     }
@@ -242,37 +245,6 @@ bool OBSTACLEAVOIDANCE::Step(STATE& state, int action,
     if((action==2) && (s.segDifficulties[s.curSegI]==2)){ // High difficulty
         prob_collision=0.25; // 0.25
     }
-    */
-
-    if((action==0) && (s.segDifficulties[s.curSegI]==0)){ // Low difficulty
-        prob_collision=0.0; // 0.0
-    }
-    if((action==0) && (s.segDifficulties[s.curSegI]==1)){ // Medium difficulty
-        prob_collision=0.0; // 0.0
-    }
-    if((action==0) && (s.segDifficulties[s.curSegI]==2)){ // High difficulty
-        prob_collision=0.0; // 0.028
-    }
-
-    if((action==1) && (s.segDifficulties[s.curSegI]==0)){ // Low difficulty
-        prob_collision=0.0; // 0.0
-    }
-    if((action==1) && (s.segDifficulties[s.curSegI]==1)){ // Medium difficulty
-        prob_collision=0.1; // 0.056
-    }
-    if((action==1) && (s.segDifficulties[s.curSegI]==2)){ // High difficulty
-        prob_collision=0.2; // 0.11
-    }
-
-    if((action==2) && (s.segDifficulties[s.curSegI]==0)){ // Low difficulty
-        prob_collision=0.0; // 0.0
-    }
-    if((action==2) && (s.segDifficulties[s.curSegI]==1)){ // Medium difficulty
-        prob_collision=0.2; // 0.14
-    }
-    if((action==2) && (s.segDifficulties[s.curSegI]==2)){ // High difficulty
-        prob_collision=0.3; // 0.25
-    }
 
     // 1  collision, 0 = no collision
     int dp= unif_dist(random_state) < prob_collision ? 1 : 0;
@@ -299,41 +271,8 @@ bool OBSTACLEAVOIDANCE::Step(STATE& state, int action,
     s.t=s.t+dt1+dt2;
     s.ts.push_back(s.t);
 
-    double prob_observe_obstacle;
-
-    // Model (occupancy) (Autonomous robots)
-    /*
-    // ICE
-    if(s.segDifficulties[s.curSegI]==0){ // Low difficulty
-        prob_observe_obstacle=0.44; // 0.44
-    }
-    if(s.segDifficulties[s.curSegI]==1){ // Medium difficulty
-        prob_observe_obstacle=0.79; // 0.79
-    }
-    if(s.segDifficulties[s.curSegI]==2){ // High difficulty
-        prob_observe_obstacle=0.86; // 0.86
-    }
-    */
-
-    // RECTANGLE
-    if (s.segDifficulties[s.curSegI]==0) { // Low difficulty
-        prob_observe_obstacle=0.1; // 0.44
-    }
-    if(s.segDifficulties[s.curSegI]==1){ // Medium difficulty
-        prob_observe_obstacle=0.5; // 0.79
-    }
-    if(s.segDifficulties[s.curSegI]==2){ // High difficulty
-        prob_observe_obstacle=0.9; // 0.86
-    }
-    int o= unif_dist(random_state) < prob_observe_obstacle ? 1 : 0 ;
-
-    s.o=o; // In state <------------------------- 
-    s.os.push_back(o); // In history
-
-    observation = o;
-
     // Reward
-    reward= - dt1 - dt2;
+    reward= dt1 - dt2;
 
     s.r=reward;
     s.rs.push_back(reward);
@@ -344,6 +283,8 @@ bool OBSTACLEAVOIDANCE::Step(STATE& state, int action,
     double dist=0; // Total distance real state <-> belief
     int hammingDist=0; // Hamming distance between single state and belief
     int res=0;
+
+    set_observation(observation, s);
 
     // Update position, to be ready for next step
     bool is_last = s.curSegI == (nSeg-1) && s.curSubsegJ==(nSubSegs[s.curSegI]-1);
@@ -360,6 +301,35 @@ bool OBSTACLEAVOIDANCE::Step(STATE& state, int action,
         return true; // terminal state
     else
         return false;
+}
+
+void OBSTACLEAVOIDANCE::set_observation(SIMULATOR::observation_t &obs,
+                                        OBSTACLEAVOIDANCE_STATE &s) const {
+    double prob_observe_obstacle;
+
+    if (s.segDifficulties[s.curSegI] == 0) { // Low difficulty
+        prob_observe_obstacle = 0.44;        // 0.44
+    }
+    if (s.segDifficulties[s.curSegI] == 1) { // Medium difficulty
+        prob_observe_obstacle = 0.79;        // 0.79
+    }
+    if (s.segDifficulties[s.curSegI] == 2) { // High difficulty
+        prob_observe_obstacle = 0.86;        // 0.86
+    }
+    int o = unif_dist(random_state) < prob_observe_obstacle ? 1 : 0;
+
+    s.o = o;           // In state <-------------------------
+    s.os.push_back(o); // In history
+
+    obs = o;
+}
+
+void OBSTACLEAVOIDANCE::reset_observation(SIMULATOR::observation_t &obs,
+                                          SIMULATOR::observation_t value,
+                                          OBSTACLEAVOIDANCE_STATE &s) const {
+    s.o = value;
+    s.os.back() = value;
+    obs = value;
 }
 
 bool OBSTACLEAVOIDANCE::LocalMove(STATE& state, const HISTORY& history,
@@ -482,7 +452,7 @@ void OBSTACLEAVOIDANCE::DisplayState(const STATE& state, std::ostream& ostr) con
     ostr << "#######################" << endl<< endl;
 }
 
-void OBSTACLEAVOIDANCE::DisplayObservation(const STATE& state, int observation, std::ostream& ostr) const // Prints the observation
+void OBSTACLEAVOIDANCE::DisplayObservation(const STATE& state, observation_t observation, std::ostream& ostr) const // Prints the observation
 {
     switch (observation)
     {
@@ -736,8 +706,8 @@ double OBSTACLEAVOIDANCE::ComputeParticleProbability(STATE& particle, std::vecto
     return probab;
 }
 
-void OBSTACLEAVOIDANCE::log_problem_info(xes_logger &xes) const {
-    xes.add_attributes({
+void OBSTACLEAVOIDANCE::log_problem_info() const {
+    XES::logger().add_attributes({
             {"problem", "obstacle avoidance"},
             {"RewardRange", RewardRange},
             {"velocity values", nVelocityValues},
@@ -750,22 +720,74 @@ void OBSTACLEAVOIDANCE::log_problem_info(xes_logger &xes) const {
         });
 
     int i = 1;
-    xes.start_list("map");
+    XES::logger().start_list("map");
     for (const auto &seg : subSegLengths) {
-        xes.start_list("segment " + std::to_string(i));
+        XES::logger().start_list("segment " + std::to_string(i));
         int j = 1;
         for (double subseg : seg) {
-            xes.add_attribute({"subseg " + std::to_string(j), subseg});
+            XES::logger().add_attribute({"subseg " + std::to_string(j), subseg});
             ++j;
         }
-        xes.end_list();
+        XES::logger().end_list();
         ++i;
     }
-    xes.end_list();
+    XES::logger().end_list();
+
+    if (!visual.empty()) {
+
+        XES::logger().start_list("visual");
+
+        XES::logger().start_list("nodes");
+        int i = 1;
+        for (const auto &seg : visual) {
+
+            for (const auto &seg : visual) {
+            }
+            int j = 1;
+            for (const auto &subseg : seg) {
+                // S1.1, S1.2 ...
+                XES::logger().start_list("S" + std::to_string(i) + "." + std::to_string(j));
+                XES::logger().add_attributes({
+                        {"y", visual[i-1][j-1].first},
+                        {"x", visual[i-1][j-1].second}
+                        });
+                XES::logger().end_list(); // close node Sx.y
+                ++j;
+            }
+            ++i;
+        }
+        XES::logger().end_list(); // close nodes
+
+        XES::logger().start_list("edges");
+        for (int i = 1; i <= nSeg; i++) {
+            for (int j = 1; j <= nSubSegs[i-1]; j++) {
+                std::string start =
+                    "S" + std::to_string(i) + "." + std::to_string(j);
+
+                std::string stop;
+                if (j < nSubSegs[i-1])
+                    stop = "S" + std::to_string(i) + "." + std::to_string(j+1);
+                else if (i < nSeg)
+                    stop = "S" + std::to_string(i+1) + "." + std::to_string(1);
+                else
+                    stop = "S" + std::to_string(1) + "." + std::to_string(1);
+
+                XES::logger().start_list("edge");
+                XES::logger().add_attributes({
+                        {"start", start},
+                        {"stop", stop},
+                        {"size", subSegLengths[i-1][j-1]},
+                        });
+                XES::logger().end_list(); // close edge
+            }
+        }
+        XES::logger().end_list(); // close edges
+
+        XES::logger().end_list(); // close visual
+    }
 }
 
-void OBSTACLEAVOIDANCE::log_beliefs(const BELIEF_STATE& beliefState, xes_logger &xes) const {
-
+void OBSTACLEAVOIDANCE::log_beliefs(const BELIEF_STATE& beliefState) const {
     static std::unordered_map<int, int> dist;
     dist.clear();
     int id;
@@ -788,43 +810,43 @@ void OBSTACLEAVOIDANCE::log_beliefs(const BELIEF_STATE& beliefState, xes_logger 
     const OBSTACLEAVOIDANCE_STATE& bmState =
         safe_cast<const OBSTACLEAVOIDANCE_STATE&>(*beliefState.GetSample(0));
 
-    xes.add_attribute({"segment", bmState.curSegI });
-    xes.add_attribute({"subsegment", bmState.curSubsegJ });
-    xes.start_list("belief");
+    XES::logger().add_attribute({"segment", bmState.curSegI });
+    XES::logger().add_attribute({"subsegment", bmState.curSubsegJ });
+    XES::logger().start_list("belief");
     for (const auto &[k, v] : dist)
-        xes.add_attribute({std::to_string(k), v});
-    xes.end_list();
+        XES::logger().add_attribute({std::to_string(k), v});
+    XES::logger().end_list();
 }
 
-void OBSTACLEAVOIDANCE::log_state(const STATE& state, xes_logger &xes) const {
+void OBSTACLEAVOIDANCE::log_state(const STATE& state) const {
     const auto& obs_state = safe_cast<const OBSTACLEAVOIDANCE_STATE&>(state);
-    xes.start_list("state");
-    xes.add_attribute({"segment", obs_state.curSegI});
-    xes.add_attribute({"subsegment", obs_state.curSubsegJ});
+    XES::logger().start_list("state");
+    XES::logger().add_attribute({"segment", obs_state.curSegI});
+    XES::logger().add_attribute({"subsegment", obs_state.curSubsegJ});
 
-    xes.start_list("difficulties");
+    XES::logger().start_list("difficulties");
     for (int i = 0; i < obs_state.segDifficulties.size(); ++i)
-        xes.add_attribute({"segment " + std::to_string(i + 1),
+        XES::logger().add_attribute({"segment " + std::to_string(i + 1),
                 obs_state.segDifficulties[i] });
-    xes.end_list();
+    XES::logger().end_list();
 
-    xes.end_list();
+    XES::logger().end_list();
 }
 
-void OBSTACLEAVOIDANCE::log_action(int action, xes_logger &xes) const {
-    xes.add_attribute({"action", action});
+void OBSTACLEAVOIDANCE::log_action(int action) const {
+    XES::logger().add_attribute({"action", action});
 }
 
-void OBSTACLEAVOIDANCE::log_observation(const STATE& state, int observation, xes_logger &xes) const {
-    xes.add_attribute({"observation", observation});
+void OBSTACLEAVOIDANCE::log_observation(const STATE& state, observation_t observation) const {
+    XES::logger().add_attribute({"observation", observation});
 }
 
-void OBSTACLEAVOIDANCE::log_reward(double reward, xes_logger &xes) const {
-    xes.add_attribute({"reward", reward});
+void OBSTACLEAVOIDANCE::log_reward(double reward) const {
+    XES::logger().add_attribute({"reward", reward});
 }
 
-void OBSTACLEAVOIDANCE::set_belief_metainfo(VNODE *v) const {
-    v->Beliefs().set_metainfo(OBSTACLEAVOIDANCE_METAINFO());
+void OBSTACLEAVOIDANCE::set_belief_metainfo(VNODE *v, const SIMULATOR &) const {
+    v->Beliefs().set_metainfo(OBSTACLEAVOIDANCE_METAINFO(), *this);
 }
 
 void OBSTACLEAVOIDANCE::pre_shield(const BELIEF_STATE &belief, std::vector<int> &legal_actions) const {
@@ -847,4 +869,57 @@ void OBSTACLEAVOIDANCE::pre_shield(const BELIEF_STATE &belief, std::vector<int> 
     else if (complex_shield && speed_2_points.is_in_threshold({p0, p1, p2})) {
         legal_actions.push_back(2);
     }
+}
+
+bool OBSTACLEAVOIDANCE::Step(const VNODE *const mcts_root, STATE &state, int action, 
+        observation_t& observation, double& reward, const BOUNDS &solution) const {
+
+    bool end = Step(state, action, observation, reward);
+
+    /*
+    if (action < 2 || end)
+        return end;
+    */
+
+    const auto &qnode = mcts_root->Child(action);
+
+
+    for (int i = 0; i < NumObservations; i++) {
+
+        const VNODE *vnode = qnode.Child(i);
+
+        if (!vnode || vnode->Beliefs().Empty())
+            continue;
+
+        const auto &meta = dynamic_cast<const OBSTACLEAVOIDANCE_METAINFO &>(
+            vnode->Beliefs().get_metainfo());
+
+        OBSTACLEAVOIDANCE_STATE& s = safe_cast<OBSTACLEAVOIDANCE_STATE&>(state);
+        double p0 = meta.get_prob_diff(s.curSegI, 0);
+        double p1 = meta.get_prob_diff(s.curSegI, 1);
+        double p2 = meta.get_prob_diff(s.curSegI, 2);
+
+
+        if (p0 >= solution.x1_loose && p0 < solution.x1_strict) {
+            reset_observation(observation, i, s);
+            std::cout << "x1 FORCE OBSERVATION " << i << std::endl;
+            break;
+        }
+
+        if (p2 <= solution.x2_loose && p2 > solution.x2_strict) {
+            reset_observation(observation, i, s);
+            std::cout << "x2 FORCE OBSERVATION " << i << std::endl;
+            break;
+        }
+
+        if ((p0 >= solution.x3_loose || p1 >= solution.x4_loose) &&
+            (p0 < solution.x4_strict || (p1 < solution.x4_strict))) {
+            reset_observation(observation, i, s);
+            std::cout << "x3 x4 FORCE OBSERVATION " << i << std::endl;
+            break;
+        }
+    }
+
+    // default behavior
+    return end;
 }

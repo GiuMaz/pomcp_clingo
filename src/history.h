@@ -13,12 +13,12 @@ public:
     {
         ENTRY() { }
 
-        ENTRY(int action, int obs)
+        ENTRY(int action, uint64_t obs)
         :   Action(action), Observation(obs)
         { }
         
         int Action;
-        int Observation;
+        uint64_t Observation;
     };
     
     bool operator==(const HISTORY& history) const

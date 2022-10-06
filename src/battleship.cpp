@@ -91,7 +91,7 @@ void BATTLESHIP::FreeState(STATE* state) const
 }
 
 bool BATTLESHIP::Step(STATE& state, int action,
-    int& observation, double& reward) const
+    observation_t& observation, double& reward) const
 {
     BATTLESHIP_STATE& bsstate = safe_cast<BATTLESHIP_STATE&>(state);
 
@@ -139,7 +139,7 @@ bool BATTLESHIP::Step(STATE& state, int action,
 }
 
 bool BATTLESHIP::LocalMove(STATE& state, const HISTORY& history,
-    int stepObs, const STATUS& status) const
+    observation_t stepObs, const STATUS& status) const
 {
     BATTLESHIP_STATE& bsstate = safe_cast<BATTLESHIP_STATE&>(state);
     bool refreshDiagonals = history.Size() &&
@@ -425,7 +425,7 @@ void BATTLESHIP::DisplayState(const STATE& state, ostream& ostr) const
     ostr << "NumRemaining = " << bsstate.NumRemaining << endl;
 }
 
-void BATTLESHIP::DisplayObservation(const STATE& state, int observation, ostream& ostr) const
+void BATTLESHIP::DisplayObservation(const STATE& state, observation_t observation, ostream& ostr) const
 {
     if (observation)
         cout << "Hit\n";

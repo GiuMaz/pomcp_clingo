@@ -1,4 +1,5 @@
 #include "tag.h"
+#include <bitset>
 
 using namespace std;
 using namespace UTILS;
@@ -45,8 +46,7 @@ void TAG::FreeState(STATE* state) const
     MemoryPool.Free(tagstate);
 }
 
-bool TAG::Step(STATE& state, int action, 
-    int& observation, double& reward) const
+bool TAG::Step(STATE& state, int action, observation_t& observation, double& reward) const
 {
     TAG_STATE& tagstate = safe_cast<TAG_STATE&>(state);
 
@@ -90,9 +90,9 @@ bool TAG::Step(STATE& state, int action,
     return tagstate.NumAlive == 0;
 }
 
-inline int TAG::GetObservation(const TAG_STATE& tagstate, int action) const
+inline SIMULATOR::observation_t TAG::GetObservation(const TAG_STATE& tagstate, int action) const
 {
-    int obs = GetIndex(tagstate.AgentPos);
+    observation_t obs = GetIndex(tagstate.AgentPos);
     if (action < 4)
         for (int opp = 0; opp < NumOpponents; ++opp)
             if (tagstate.OpponentPos[opp] == tagstate.AgentPos)
@@ -196,7 +196,7 @@ void TAG::MoveOpponent(TAG_STATE& tagstate, int opp) const
 }
 
 bool TAG::LocalMove(STATE& state, const HISTORY& history,
-    int stepObs, const STATUS& status) const
+    observation_t stepObs, const STATUS& status) const
 {
     TAG_STATE& tagstate = safe_cast<TAG_STATE&>(state);
 
@@ -205,10 +205,10 @@ bool TAG::LocalMove(STATE& state, const HISTORY& history,
         return false;
     tagstate.OpponentPos[opp] = GetCoord(Random(NumCells));
 
-    int realObs = history.Back().Observation;
+    observation_t realObs = history.Back().Observation;
     if (realObs < NumCells && realObs != GetIndex(tagstate.AgentPos))
         tagstate.AgentPos = GetCoord(realObs);
-    int simObs = GetObservation(tagstate, history.Back().Action);
+    observation_t simObs = GetObservation(tagstate, history.Back().Action);
     return simObs == realObs;
 }
 
@@ -268,7 +268,7 @@ void TAG::DisplayState(const STATE& state, std::ostream& ostr) const
     }
 }
 
-void TAG::DisplayObservation(const STATE& state, int observation, std::ostream& ostr) const
+void TAG::DisplayObservation(const STATE& state, observation_t observation, std::ostream& ostr) const
 {
     if (observation == NumCells)
         ostr << "On opponent" << endl;
@@ -284,3 +284,99 @@ void TAG::DisplayAction(int action, std::ostream& ostr) const
     else
         ostr << "TAG" << endl;
 }
+
+void TAG::log_problem_info() const {
+    XES::logger().add_attributes({
+            {"problem", "tag"},
+            {"RewardRange", RewardRange},
+            {"NumOpponents", NumOpponents},
+            {"NumCells", NumCells},
+        });
+}
+
+void TAG::log_beliefs(const BELIEF_STATE& beliefState) const {
+    std::unordered_map<int, int> dist;
+    int id;
+    for (int i = 0; i < beliefState.GetNumSamples(); i++){
+        const STATE* state = beliefState.GetSample(i);
+        const auto& tagstate = safe_cast<const TAG_STATE&>(*state);
+        
+        // Compute state id
+        id=0;
+        for (int j = 0; j < tagstate.OpponentPos.size(); j++) {
+            if (tagstate.OpponentPos[j] == COORD::Null) {
+                id *= (NumCells+1);
+                id += NumCells;
+            }
+            else {
+                id *= (NumCells+1);
+                assert(GetIndex(tagstate.OpponentPos[j]) < NumCells);
+                id += GetIndex(tagstate.OpponentPos[j]);
+            }
+        }
+        // If it is not in dist then add it and initialize to 1
+        if (dist.find(id) == dist.end())
+            dist[id]= 1;
+        else
+            dist[id]++;
+    }
+
+    const STATE* state = beliefState.GetSample(0);
+    const auto& ts = safe_cast<const TAG_STATE&>(*state);
+    XES::logger().add_attribute({"agent x", ts.AgentPos.X });
+    XES::logger().add_attribute({"agent y", ts.AgentPos.Y });
+    XES::logger().add_attribute({"agent index", GetIndex(ts.AgentPos)});
+    XES::logger().start_list("belief");
+    for (const auto &[k, v] : dist)
+        XES::logger().add_attribute({std::to_string(k), v});
+    XES::logger().end_list();
+}
+
+void TAG::log_state(const STATE& state) const {
+    const auto& ts = safe_cast<const TAG_STATE&>(state);
+    XES::logger().start_list("state");
+    XES::logger().add_attribute({"agent x", ts.AgentPos.X });
+    XES::logger().add_attribute({"agent y", ts.AgentPos.Y });
+    XES::logger().add_attribute({"alive", ts.NumAlive });
+
+    XES::logger().start_list("opponents");
+    int i = 0;
+    for (const auto &r : ts.OpponentPos) {
+        XES::logger().start_list("opponent");
+        XES::logger().add_attributes({{"number", i}, {"x", r.X}, {"y", r.Y}});
+        XES::logger().end_list();
+        ++i;
+    }
+    XES::logger().end_list(); // end rocks
+
+    XES::logger().end_list(); // end state
+}
+
+void TAG::log_action(int action) const {
+    switch (action) {
+        case COORD::E_EAST:
+            XES::logger().add_attribute({"action", "east"});
+            return;
+        case COORD::E_NORTH:
+            XES::logger().add_attribute({"action", "north"});
+            return;
+        case COORD::E_SOUTH:
+            XES::logger().add_attribute({"action", "south"});
+            return;
+        case COORD::E_WEST:
+            XES::logger().add_attribute({"action", "west"});
+            return;
+        case 4:
+            XES::logger().add_attribute({"action", "tag"});
+            return;
+    }
+}
+
+void TAG::log_observation(const STATE& state, observation_t observation) const {
+    XES::logger().add_attribute({"observation", observation});
+}
+
+void TAG::log_reward(double reward) const {
+    XES::logger().add_attribute({"reward", reward});
+}
+

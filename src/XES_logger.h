@@ -27,7 +27,8 @@ public:
         type("float"), key(k), value(std::to_string(v)) {}
     xes_attribute(const std::string &k, bool v ):
         type("boolean"), key(k), value(std::to_string(v)) {}
-    /*
+
+    /* FIXME
     template<typename Clock>
     xes_attribute(const std::string &k, std::chrono::time_point<Clock> v):
         type("date"), key(k), value(std::to_string(v)) {}
@@ -204,5 +205,29 @@ private:
     xes_state state;
     std::string file_name;
     std::ofstream file;
+};
+
+class XES {
+private:
+    XES() {}
+
+    static xes_logger logger_;
+    //static std::string file_;
+    static bool enabled_;
+
+public:
+    static void init(bool enable, std::string file="") {
+        enabled_ = enable;
+        if (enable)
+            logger_ = xes_logger(file);
+    }
+
+    static xes_logger &logger() { return logger_; }
+    static bool enabled() { return enabled_; }
+    /*
+    static void set_enabled(bool b) { enabled_ = b; }
+    static void set_file(const std::string &f) {}
+    static const std::string &get_file() { return file_; }
+    */
 };
 

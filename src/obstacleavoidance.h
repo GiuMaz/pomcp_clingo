@@ -54,7 +54,7 @@ public:
     virtual void update(STATE *s) {
         const OBSTACLEAVOIDANCE_STATE& state = safe_cast<const OBSTACLEAVOIDANCE_STATE&>(*s);
         total++;
-        for (int i = 0; i < 4; i++) {  // For each segment difficulty
+        for (int i = 0; i < 8; i++) {  // For each segment difficulty
             distr[i][state.segDifficulties[i]] += 1;
         }
     }
@@ -71,12 +71,14 @@ public:
         return static_cast<double>(distr[segment][diff]) / total;
     }
 
-    virtual std::unique_ptr<BELIEF_META_INFO> clone() const {
-        return std::make_unique<OBSTACLEAVOIDANCE_METAINFO>(*this);
+    virtual BELIEF_META_INFO *clone() const {
+        return new OBSTACLEAVOIDANCE_METAINFO(*this);
     }
 
+
 private:
-    std::array<std::array<int, 3>, 4> distr;
+
+    std::array<std::array<int, 3>, 8> distr;
     int total = 0;
 };
 
@@ -93,7 +95,9 @@ class OBSTACLEAVOIDANCE : public SIMULATOR
         virtual STATE* CreateStartState() const;
         virtual void FreeState(STATE* state) const;
         virtual bool Step(STATE& state, int action, 
-                int& observation, double& reward) const;
+                observation_t& observation, double& reward) const;
+        virtual bool Step(const VNODE *const mcts_root, STATE &state, int action, 
+            observation_t& observation, double& reward, const BOUNDS &s) const;
 
         void GenerateLegal(const STATE& state, const HISTORY& history,
                 std::vector<int>& legal, const STATUS& status) const;
@@ -105,7 +109,7 @@ class OBSTACLEAVOIDANCE : public SIMULATOR
         virtual void DisplayBeliefs(const BELIEF_STATE& beliefState,
                 std::ostream& ostr) const;
         virtual void DisplayState(const STATE& state, std::ostream& ostr) const;
-        virtual void DisplayObservation(const STATE& state, int observation, std::ostream& ostr) const;
+        virtual void DisplayObservation(const STATE& state, observation_t observation, std::ostream& ostr) const;
         virtual void DisplayAction(int action, std::ostream& ostr) const;
         virtual double JointProb(const STATE& state) const;
         void DisplayStateId(const STATE& state, std::ostream& ostr) const;
@@ -122,17 +126,24 @@ class OBSTACLEAVOIDANCE : public SIMULATOR
 
         virtual double ComputeParticleProbability(STATE& particle, std::vector<double*>* stateVarRelationships) const;
 
-    virtual void log_problem_info(xes_logger &xes) const;
-    virtual void log_beliefs(const BELIEF_STATE& beliefState,
-            xes_logger &/*xes*/) const;
-    virtual void log_state(const STATE& state, xes_logger &/*xes*/) const;
-    virtual void log_action(int action, xes_logger &/*xes*/) const;
-    virtual void log_observation(const STATE& state, int observation,
-            xes_logger &/*xes*/) const;
-    virtual void log_reward(double reward, xes_logger &/*xes*/) const;
+    virtual void log_problem_info() const;
+    virtual void log_beliefs(const BELIEF_STATE& beliefState) const;
+    virtual void log_state(const STATE& state) const;
+    virtual void log_action(int action) const;
+    virtual void log_observation(const STATE& state, observation_t observation) const;
+    virtual void log_reward(double reward) const;
 
-    virtual void set_belief_metainfo(VNODE *v) const;
+    virtual void set_belief_metainfo(VNODE *v, const SIMULATOR &s) const;
+    virtual void FreeMetainfo(BELIEF_META_INFO *m) const {
+        OBSTACLEAVOIDANCE_METAINFO *tm = safe_cast<OBSTACLEAVOIDANCE_METAINFO*>(m);
+        delete m;
+    }
+
     virtual void pre_shield(const BELIEF_STATE &belief, std::vector<int> &legal_actions) const;
+
+    void set_visual(std::vector<std::vector<std::pair<double,double>>> v) {
+        visual = v;
+    }
 
     protected:
         int nSeg;
@@ -145,9 +156,14 @@ class OBSTACLEAVOIDANCE : public SIMULATOR
     private:
         mutable MEMORY_POOL<OBSTACLEAVOIDANCE_STATE> MemoryPool;
 
+        void set_observation(SIMULATOR::observation_t &obs, OBSTACLEAVOIDANCE_STATE &s) const;
+        void reset_observation(SIMULATOR::observation_t &obs,
+                               SIMULATOR::observation_t value,
+                               OBSTACLEAVOIDANCE_STATE &s) const;
         hellinger_shield<3> speed_2_points;
         double shield_x1, shield_x2, shield_x3, shield_x4;
         mutable std::uniform_real_distribution<> unif_dist;
+        std::vector<std::vector<std::pair<double,double>>> visual;
 };
 
 #endif

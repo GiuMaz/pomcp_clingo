@@ -4,6 +4,7 @@
 #include "simulator.h"
 #include "node.h"
 #include "statistic.h"
+#include <clingo.hh>
 
 class MCTS
 {
@@ -29,11 +30,11 @@ public:
         bool use_shield;
     };
 
-    MCTS(const SIMULATOR& simulator, const PARAMS& params, xes_logger &logger);
+    MCTS(const SIMULATOR& simulator, const PARAMS& params);
     ~MCTS();
 
     int SelectAction();
-    bool Update(int action, int observation, double reward);
+    bool Update(int action, SIMULATOR::observation_t observation, double reward);
 
     void UCTSearch();
     void RolloutSearch();
@@ -48,11 +49,12 @@ public:
     void DisplayValue(int depth, std::ostream& ostr) const;
     void DisplayPolicy(int depth, std::ostream& ostr) const;
 
+    const VNODE * const GetRoot() const { return Root; }
+
     static void UnitTest();
     static void InitFastUCB(double exploration);
 
 private:
-
     const SIMULATOR& Simulator;
     int TreeDepth, PeakTreeDepth;
     PARAMS Params;
@@ -63,7 +65,6 @@ private:
     STATISTIC StatTreeDepth;
     STATISTIC StatRolloutDepth;
     STATISTIC StatTotalReward;
-    xes_logger &logger;
 
     std::vector<int> legal_actions;
 

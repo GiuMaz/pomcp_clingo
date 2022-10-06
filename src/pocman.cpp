@@ -175,7 +175,7 @@ COORD POCMAN::NextPos(const COORD& from, int dir) const
 }
 
 bool POCMAN::Step(STATE& state, int action,
-    int& observation, double& reward) const
+    observation_t& observation, double& reward) const
 {
     POCMAN_STATE& pocstate = safe_cast<POCMAN_STATE&>(state);
     reward = RewardDefault;
@@ -255,7 +255,7 @@ int POCMAN::MakeObservations(const POCMAN_STATE& pocstate) const
 }
 
 bool POCMAN::LocalMove(STATE& state, const HISTORY& history,
-    int stepObs, const STATUS& status) const
+    observation_t stepObs, const STATUS& status) const
 {
     POCMAN_STATE& pocstate = safe_cast<POCMAN_STATE&>(state);
     
@@ -559,7 +559,7 @@ void POCMAN::DisplayState(const STATE& state, ostream& ostr) const
     ostr << endl;
 }
 
-void POCMAN::DisplayObservation(const STATE& state, int observation, ostream& ostr) const
+void POCMAN::DisplayObservation(const STATE& state, observation_t observation, ostream& ostr) const
 {
     const POCMAN_STATE& pocstate = safe_cast<const POCMAN_STATE&>(state);
     GRID<char> obs(Maze.GetXSize(), Maze.GetYSize());

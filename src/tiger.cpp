@@ -77,8 +77,8 @@ STATE* TIGER::CreateStartState() const {
     return state;
 }
 
-void TIGER::set_belief_metainfo(VNODE *v) const {
-    v->Beliefs().set_metainfo(TIGER_METAINFO());
+void TIGER::set_belief_metainfo(VNODE *v, const SIMULATOR &) const {
+    v->Beliefs().set_metainfo(TIGER_METAINFO(), *this);
 }
 
 void TIGER::FreeState(STATE* state) const // Free memory of state
@@ -88,7 +88,7 @@ void TIGER::FreeState(STATE* state) const // Free memory of state
 }
 
 
-bool TIGER::Step(STATE& state, int action, int& observation, double& reward) const {
+bool TIGER::Step(STATE& state, int action, observation_t& observation, double& reward) const {
 
 
     TIGER_STATE& tiger_state = safe_cast<TIGER_STATE&>(state);
@@ -167,7 +167,7 @@ void TIGER::DisplayState(const STATE& state, std::ostream& ostr) const {
     ostr << "#######################" << endl<< endl;
 }
 
-void TIGER::DisplayObservation(const STATE& state, int observation,
+void TIGER::DisplayObservation(const STATE& state, observation_t observation,
                                std::ostream& ostr) const {
     switch (observation) {
         case O_LEFT_ROAR:
@@ -200,8 +200,7 @@ void TIGER::DisplayAction(int action, std::ostream& ostr) const {
 }
 
 // xes
-void TIGER::log_beliefs(const BELIEF_STATE& beliefState,
-        xes_logger & xes) const {
+void TIGER::log_beliefs(const BELIEF_STATE& beliefState) const {
     int left = 0, right = 0;
 
     for (int i = 0; i < beliefState.GetNumSamples(); i++){
@@ -212,56 +211,56 @@ void TIGER::log_beliefs(const BELIEF_STATE& beliefState,
         else
             ++right;
     }
-    xes.start_list("belief");
-    xes.add_attribute({"tiger left", left});
-    xes.add_attribute({"tiger right", right});
-    xes.end_list();
+    XES::logger().start_list("belief");
+    XES::logger().add_attribute({"tiger left", left});
+    XES::logger().add_attribute({"tiger right", right});
+    XES::logger().end_list();
 }
 
-void TIGER::log_state(const STATE& state, xes_logger & xes) const {
+void TIGER::log_state(const STATE& state) const {
     const TIGER_STATE& tiger_state = safe_cast<const TIGER_STATE&>(state);
-    xes.start_list("state");
-    xes.add_attribute({"tiger on left", tiger_state.tiger_on_left});
-    xes.end_list();
+    XES::logger().start_list("state");
+    XES::logger().add_attribute({"tiger on left", tiger_state.tiger_on_left});
+    XES::logger().end_list();
 }
 
-void TIGER::log_action(int action, xes_logger & xes) const {
+void TIGER::log_action(int action) const {
     switch (action) {
         case A_LISTEN:
-            xes.add_attribute({"action", "listen"});
+            XES::logger().add_attribute({"action", "listen"});
             break;
         case A_LEFT_DOOR:
-            xes.add_attribute({"action", "open left"});
+            XES::logger().add_attribute({"action", "open left"});
             break;
         case A_RIGHT_DOOR:
-            xes.add_attribute({"action", "open right"});
+            XES::logger().add_attribute({"action", "open right"});
             break;
     }
 }
 
-void TIGER::log_observation(const STATE& state, int observation, xes_logger & xes) const {
+void TIGER::log_observation(const STATE& state, observation_t observation) const {
     switch (observation) {
         case O_LEFT_ROAR:
-            xes.add_attribute({"observation", "roar left"});
+            XES::logger().add_attribute({"observation", "roar left"});
             break;
         case O_RIGHT_ROAR:
-            xes.add_attribute({"observation", "roar right"});
+            XES::logger().add_attribute({"observation", "roar right"});
             break;
         case O_TREASURE:
-            xes.add_attribute({"observation", "treasure"});
+            XES::logger().add_attribute({"observation", "treasure"});
             break;
         case O_TIGER:
-            xes.add_attribute({"observation", "tiger"});
+            XES::logger().add_attribute({"observation", "tiger"});
             break;
     }
 }
 
-void TIGER::log_reward(double reward, xes_logger & xes) const {
-    xes.add_attribute({"reward", reward});
+void TIGER::log_reward(double reward) const {
+    XES::logger().add_attribute({"reward", reward});
 }
 
-void TIGER::log_problem_info(xes_logger &xes) const {
-    xes.add_attributes({
+void TIGER::log_problem_info() const {
+    XES::logger().add_attributes({
             {"problem", "tiger"},
             {"RewardRange", RewardRange},
             {"shield open", tr_open},

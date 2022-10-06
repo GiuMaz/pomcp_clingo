@@ -57,6 +57,30 @@ struct COORD
         E_NORTHWEST
     };
     
+    COORD operator+(int move) const
+    {
+        switch (move) {
+            case E_NORTH:
+                return COORD(X, Y - 1);
+            case E_EAST:
+                break;
+            case E_SOUTH:
+                break;
+            case E_WEST:
+                break;
+            case E_NORTHEAST:
+                break;
+            case E_SOUTHEAST:
+                break;
+            case E_SOUTHWEST:
+                break;
+            case E_NORTHWEST:
+                break;
+            default:
+                return *this;
+        }
+    }
+
     static double EuclideanDistance(COORD lhs, COORD rhs);
     static int ManhattanDistance(COORD lhs, COORD rhs);
     static int DirectionalDistance(COORD lhs, COORD rhs, int direction);

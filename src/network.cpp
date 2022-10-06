@@ -83,7 +83,7 @@ void NETWORK::FreeState(STATE* state) const
 }
 
 bool NETWORK::Step(STATE& state, int action, 
-    int& observation, double& reward) const
+    observation_t& observation, double& reward) const
 {
     NETWORK_STATE& nstate = safe_cast<NETWORK_STATE&>(state);
     reward = 0;
@@ -168,12 +168,9 @@ void NETWORK::DisplayObservation(const STATE& state, int observation, std::ostre
 
 void NETWORK::DisplayAction(int action, std::ostream& ostr) const
 {
-    switch (action)
-    {
-        if (action == NumMachines)
-            ostr << "No action" << endl;
-        int machine = action / 2;
-        int reboot = action % 2;
-        ostr << (reboot ? "Reboot" : "Ping") << " machine " << machine << endl;
-    }
+    if (action == NumMachines)
+        ostr << "No action" << endl;
+    int machine = action / 2;
+    int reboot = action % 2;
+    ostr << (reboot ? "Reboot" : "Ping") << " machine " << machine << endl;
 }

@@ -39,8 +39,8 @@ public:
             return static_cast<double>(on_left) / total;
     }
 
-    virtual std::unique_ptr<BELIEF_META_INFO> clone() const {
-        return std::make_unique<TIGER_METAINFO>(*this);
+    virtual BELIEF_META_INFO *clone() const {
+        return new TIGER_METAINFO(*this);
     }
 
 private:
@@ -58,7 +58,7 @@ public:
     virtual void Validate(const STATE& state) const;
     virtual STATE* CreateStartState() const;
     virtual void FreeState(STATE* state) const;
-    virtual bool Step(STATE& state, int action, int& observation,
+    virtual bool Step(STATE& state, int action, observation_t& observation,
                       double& reward) const;
     void GenerateLegal(const STATE& state, const HISTORY& history,
         std::vector<int>& legal, const STATUS& status) const;
@@ -70,20 +70,22 @@ public:
     virtual void DisplayBeliefs(const BELIEF_STATE& beliefState,
         std::ostream& ostr) const;
     virtual void DisplayState(const STATE& state, std::ostream& ostr) const;
-    virtual void DisplayObservation(const STATE& state, int observation,
+    virtual void DisplayObservation(const STATE& state, observation_t observation,
                                     std::ostream& ostr) const;
     virtual void DisplayAction(int action, std::ostream& ostr) const;
 
-    virtual void log_problem_info(xes_logger &xes) const;
-    virtual void log_beliefs(const BELIEF_STATE& beliefState,
-            xes_logger &xes) const;
-    virtual void log_state(const STATE& state, xes_logger &xes) const;
-    virtual void log_action(int action, xes_logger &xes) const;
-    virtual void log_observation(const STATE& state, int observation,
-            xes_logger &xes) const;
-    virtual void log_reward(double reward, xes_logger &xes) const;
+    virtual void log_problem_info() const;
+    virtual void log_beliefs(const BELIEF_STATE& beliefState) const;
+    virtual void log_state(const STATE& state) const;
+    virtual void log_action(int action) const;
+    virtual void log_observation(const STATE& state, observation_t observation) const;
+    virtual void log_reward(double reward) const;
     
-    virtual void set_belief_metainfo(VNODE *v) const;
+    virtual void set_belief_metainfo(VNODE *v, const SIMULATOR &s) const;
+    virtual void FreeMetainfo(BELIEF_META_INFO *m) const {
+        TIGER_METAINFO *tm = safe_cast<TIGER_METAINFO*>(m);
+        delete m;
+    }
 
     // shielding
     virtual void pre_shield(const BELIEF_STATE &belief, std::vector<int> &legal_actions) const;

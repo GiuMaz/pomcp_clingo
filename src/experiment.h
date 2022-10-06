@@ -49,10 +49,9 @@ public:
         bool AutoExploration;
     };
 
-    EXPERIMENT(const SIMULATOR& real, const SIMULATOR& simulator, 
+    EXPERIMENT(SIMULATOR& real, SIMULATOR& simulator, 
         const std::string& outputFile, 
-        EXPERIMENT::PARAMS& expParams, MCTS::PARAMS& searchParams,
-        std::string xes_file = "log.xes");
+        EXPERIMENT::PARAMS& expParams, MCTS::PARAMS& searchParams);
 
     void set_fixed_seed(int s) {
         use_fixed_seed = true;
@@ -65,16 +64,14 @@ public:
     void AverageReward();
 
 private:
-    const SIMULATOR& Real;
-    const SIMULATOR& Simulator;
+    SIMULATOR& Real;
+    SIMULATOR& Simulator;
     EXPERIMENT::PARAMS& ExpParams;
     MCTS::PARAMS& SearchParams;
     RESULTS Results;
-    xes_logger logger;
 
     bool use_fixed_seed = false;
     int fixed_seed = -1;
-
     int real_seed;
     std::ofstream OutputFile;
 };

@@ -1,6 +1,7 @@
 #include "mcts.h"
 #include "testsimulator.h"
-#include <math.h>
+#include <cmath>
+#include <clingo.hh>
 
 #include <algorithm>
 
@@ -27,11 +28,11 @@ MCTS::PARAMS::PARAMS()
 {
 }
 
-MCTS::MCTS(const SIMULATOR& simulator, const PARAMS& params, xes_logger &l)
+MCTS::MCTS(const SIMULATOR& simulator, const PARAMS& params)
 :   Simulator(simulator),
     Params(params),
     TreeDepth(0),
-    logger(l)
+    PeakTreeDepth(0)
 {
     VNODE::NumChildren = Simulator.GetNumActions();
     QNODE::NumChildren = Simulator.GetNumObservations();
@@ -49,7 +50,7 @@ MCTS::~MCTS()
     VNODE::FreeAll();
 }
 
-bool MCTS::Update(int action, int observation, double reward)
+bool MCTS::Update(int action, SIMULATOR::observation_t observation, double reward)
 {
     History.Add(action, observation);
     BELIEF_STATE beliefs;
@@ -92,7 +93,9 @@ bool MCTS::Update(int action, int observation, double reward)
     VNODE* newRoot = ExpandNode(state);
     //std::swap(newRoot->Beliefs(), beliefs);
     newRoot->Beliefs().Move(beliefs);
+    Simulator.Prior(state, History, newRoot, Status);
     Root = newRoot;
+
     return true;
 }
 
@@ -102,12 +105,6 @@ int MCTS::SelectAction()
         RolloutSearch();
     else
         UCTSearch();
-
-    /*
-    if constexpr (false)
-        return Simulator.shield_action(Root->Beliefs(), GreedyUCB(Root, false));
-    else
-    */
     return GreedyUCB(Root, false);
 }
 
@@ -126,7 +123,7 @@ void MCTS::RolloutSearch()
 		STATE* state = Root->Beliefs().CreateSample(Simulator);
 		Simulator.Validate(*state);
 
-		int observation;
+        SIMULATOR::observation_t observation;
 		double immediateReward, delayedReward, totalReward;
 		bool terminal = Simulator.Step(*state, action, observation, immediateReward);
 
@@ -151,10 +148,14 @@ void MCTS::UCTSearch()
 {
     ClearStatistics();
     int historyDepth = History.Size();
-    Simulator.log_beliefs(Root->Beliefs(), logger);
 
     // compute legal action in root
-    Simulator.pre_shield(Root->Beliefs(), legal_actions);
+    legal_actions.clear();
+
+    if (Params.use_shield) {
+        // initialize legal actions
+        Simulator.pre_shield(Root->Beliefs(), legal_actions);
+    }
 
     for (int n = 0; n < Params.NumSimulations; n++)
     {
@@ -203,7 +204,7 @@ double MCTS::SimulateV(STATE& state, VNODE* vnode)
 
 double MCTS::SimulateQ(STATE& state, QNODE& qnode, int action)
 {
-    int observation;
+    SIMULATOR::observation_t observation;
     double immediateReward, delayedReward = 0;
 
     if (Simulator.HasAlpha())
@@ -254,7 +255,7 @@ void MCTS::AddRave(VNODE* vnode, double totalReward)
 VNODE* MCTS::ExpandNode(const STATE* state)
 {
     VNODE* vnode = VNODE::Create();
-    Simulator.set_belief_metainfo(vnode);
+    Simulator.set_belief_metainfo(vnode, Simulator);
     vnode->Value.Set(0, 0);
     Simulator.Prior(state, History, vnode, Status);
 
@@ -376,10 +377,10 @@ double MCTS::Rollout(STATE& state)
     int numSteps;
     for (numSteps = 0; numSteps + TreeDepth < Params.MaxDepth && !terminal; ++numSteps)
     {
-        int observation;
+        SIMULATOR::observation_t observation;
         double reward;
 
-        int action = Simulator.SelectRandom(state, History, Status);
+        int action = Simulator.SelectRandom(state, History, BeliefState(), Status);
         terminal = Simulator.Step(state, action, observation, reward);
         History.Add(action, observation);
 
@@ -427,7 +428,7 @@ void MCTS::AddTransforms(VNODE* root, BELIEF_STATE& beliefs)
 
 STATE* MCTS::CreateTransform() const
 {
-    int stepObs;
+    SIMULATOR::observation_t stepObs;
     double stepReward;
 
     STATE* state = Root->Beliefs().CreateSample(Simulator);
@@ -519,8 +520,8 @@ void MCTS::UnitTestGreedy()
 {
     TEST_SIMULATOR testSimulator(5, 5, 0);
     PARAMS params;
-    xes_logger xes("unit_test.xes");
-    MCTS mcts(testSimulator, params, xes);
+    MCTS mcts(testSimulator, params);
+
     int numAct = testSimulator.GetNumActions();
     int numObs = testSimulator.GetNumObservations();
 
@@ -536,8 +537,7 @@ void MCTS::UnitTestUCB()
 {
     TEST_SIMULATOR testSimulator(5, 5, 0);
     PARAMS params;
-    xes_logger xes("unit_test.xes");
-    MCTS mcts(testSimulator, params, xes);
+    MCTS mcts(testSimulator, params);
     int numAct = testSimulator.GetNumActions();
     int numObs = testSimulator.GetNumObservations();
 
@@ -588,8 +588,7 @@ void MCTS::UnitTestRollout()
     PARAMS params;
     params.NumSimulations = 1000;
     params.MaxDepth = 10;
-    xes_logger xes("unit_test.xes");
-    MCTS mcts(testSimulator, params, xes);
+    MCTS mcts(testSimulator, params);
     double totalReward;
     for (int n = 0; n < mcts.Params.NumSimulations; ++n)
     {
@@ -608,8 +607,7 @@ void MCTS::UnitTestSearch(int depth)
     PARAMS params;
     params.MaxDepth = depth + 1;
     params.NumSimulations = pow(10, depth + 1);
-    xes_logger xes("unit_test.xes");
-    MCTS mcts(testSimulator, params, xes);
+    MCTS mcts(testSimulator, params);
     mcts.UCTSearch();
     double rootValue = mcts.Root->Value.GetValue();
     double optimalValue = testSimulator.OptimalValue();

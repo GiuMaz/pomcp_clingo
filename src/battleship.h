@@ -39,17 +39,17 @@ public:
     virtual STATE* CreateStartState() const;
     virtual void FreeState(STATE* state) const;
     virtual bool Step(STATE& state, int action, 
-        int& observation, double& reward) const;
+        observation_t& observation, double& reward) const;
         
     void GenerateLegal(const STATE& state, const HISTORY& history,
         std::vector<int>& legal, const STATUS& status) const;
     virtual bool LocalMove(STATE& state, const HISTORY& history,
-        int stepObs, const STATUS& status) const;
+        observation_t stepObs, const STATUS& status) const;
 
     virtual void DisplayBeliefs(const BELIEF_STATE& beliefState, 
         std::ostream& ostr) const;
     virtual void DisplayState(const STATE& state, std::ostream& ostr) const;
-    virtual void DisplayObservation(const STATE& state, int observation, std::ostream& ostr) const;
+    virtual void DisplayObservation(const STATE& state, observation_t observation, std::ostream& ostr) const;
     virtual void DisplayAction(int action, std::ostream& ostr) const;
 
 private:

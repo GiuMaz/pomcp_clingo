@@ -1,4 +1,6 @@
 #include "rocksample.h"
+#include <limits>
+#include <sstream>
 
 #include <unordered_map>
 
@@ -12,7 +14,8 @@ ROCKSAMPLE::ROCKSAMPLE(int size, int rocks)
     Size(size),
     NumRocks(rocks),
     SmartMoveProb(0.95),
-    UncertaintyCount(0)
+    UncertaintyCount(0),
+    has_fixed_belief(false)
 {
     NumActions = NumRocks + 5;
     NumObservations = 3;
@@ -21,30 +24,154 @@ ROCKSAMPLE::ROCKSAMPLE(int size, int rocks)
 
     if (size == 4 && rocks == 1)
         Init_4_1();
+    else if (size == 7 && rocks == 4)
+        Init_7_4();
     else if (size == 7 && rocks == 8)
         Init_7_8();
     else if (size == 11 && rocks == 11)
         Init_11_11();
+    else if (size == 15 && rocks == 15)
+        Init_15_15();
+    else if (size == 12 && rocks == 4)
+        Init_12_4();
+    else if (size == 24 && rocks == 4)
+        Init_24_4();
+    else if (size == 24 && rocks == 8)
+        Init_24_8();
     else
         InitGeneral();
+
+    // Load asp program with rules
+    clingo_control.load("/home/giulio/Progetti/pomcp_clingo/asp_test_rocksample_neg_ex_2.lp");
+    clingo_control.ground({{"base", {}}});
+
+}
+
+ROCKSAMPLE::ROCKSAMPLE(int size, int rocks, int x, int y,
+           const std::vector<double> &belief)
+:   Grid(size, size),
+    Size(size),
+    NumRocks(rocks),
+    SmartMoveProb(0.95),
+    UncertaintyCount(0) ,
+    has_fixed_belief(true),
+    fixed_belief(belief)
+{
+    NumActions = NumRocks + 5;
+    NumObservations = 3;
+    RewardRange = 20;
+    Discount = 0.95;
+
+    if (size == 4 && rocks == 1)
+        Init_4_1();
+    else if (size == 7 && rocks == 4)
+        Init_7_4();
+    else if (size == 7 && rocks == 8)
+        Init_7_8();
+    else if (size == 11 && rocks == 11)
+        Init_11_11();
+    else if (size == 15 && rocks == 15)
+        Init_15_15();
+    else if (size == 12 && rocks == 4)
+        Init_12_4();
+    else if (size == 24 && rocks == 4)
+        Init_24_4();
+    else if (size == 24 && rocks == 8)
+        Init_24_8();
+    else
+        InitGeneral();
+
+    StartPos = COORD(x, y);
+
+    // Load asp program with rules
+    clingo_control.load("/home/giulio/Progetti/pomcp_clingo/asp_test_rocksample_neg_ex_2.lp");
+    clingo_control.ground({{"base", {}}});
+}
+
+ROCKSAMPLE::ROCKSAMPLE(int size, int rocks, std::string shield_file)
+:   Grid(size, size),
+    Size(size),
+    NumRocks(rocks),
+    SmartMoveProb(0.95),
+    UncertaintyCount(0),
+    has_fixed_belief(false)
+{
+    NumActions = NumRocks + 5;
+    NumObservations = 3;
+    RewardRange = 20;
+    Discount = 0.95;
+
+    if (size == 4 && rocks == 1)
+        Init_4_1();
+    else if (size == 7 && rocks == 4)
+        Init_7_4();
+    else if (size == 7 && rocks == 8)
+        Init_7_8();
+    else if (size == 11 && rocks == 11)
+        Init_11_11();
+    else if (size == 15 && rocks == 15)
+        Init_15_15();
+    else if (size == 12 && rocks == 4)
+        Init_12_4();
+    else if (size == 24 && rocks == 4)
+        Init_24_4();
+    else if (size == 24 && rocks == 8)
+        Init_24_8();
+    else
+        InitGeneral();
+
+    ifstream iff(shield_file);
+    iff >> sample_shield_tr;
+    if (iff.eof())
+        return;
+
+    double threshold;
+    iff >> threshold;
+    sampling_points.set_threshold(threshold);
+
+    std::string line;
+    std::getline(iff, line); // discard threshold line
+    std::array<double, 1> p;
+    std::vector<std::array<double, 1>> points;
+
+    std::getline(iff, line);
+    std::stringstream ssopen(line);
+    while (ssopen >> p[0])
+        points.emplace_back(p);
+    sampling_points.set_points(points);
+
+    // Load asp program with rules
+    clingo_control.load("/home/giulio/Progetti/pomcp_clingo/asp_test_rocksample_neg_ex_2.lp");
+    clingo_control.ground({{"base", {}}});
 }
 
 void ROCKSAMPLE::InitGeneral()
 {
-    HalfEfficiencyDistance = 20;
+    HalfEfficiencyDistance = 20; // 20 IS STANDARD
+    //HalfEfficiencyDistance = 2; // 2 IS NOISY
     StartPos = COORD(0, Size / 2);
-    RandomSeed(0);
+    //RandomSeed(0);
     Grid.SetAllValues(-1);
     for (int i = 0; i < NumRocks; ++i)
     {
         COORD pos;
-        do
-        {
-            pos = COORD(Random(Size), Random(Size));
-        }
-        while (Grid(pos) >= 0);
+        do {
+            pos = COORD(random_state() % Size, random_state() % Size);
+        } while (Grid(pos) >= 0);
         Grid(pos) = i;
         RockPos.push_back(pos);
+    }
+}
+
+void RANDOM_ROCKSAMPLE::update(const ROCKSSETUP &rs) {
+    assert(rs.num_rocks() == NumRocks);
+    HalfEfficiencyDistance = 20; // 20 IS STANDARD
+    StartPos = COORD(0, rs.grid_size()/2);
+    Grid.SetAllValues(-1);
+    RockPos.clear();
+    for (int i = 0; i < NumRocks; ++i) {
+        Grid(rs.get_rock(i)) = i;
+        RockPos.push_back(rs.get_rock(i));
     }
 }
 
@@ -59,9 +186,114 @@ void ROCKSAMPLE::Init_4_1()
     };
 
     HalfEfficiencyDistance = 20;
+    //HalfEfficiencyDistance = 2; // 2 IS NOISY
     StartPos = COORD(0, 0);
     Grid.SetAllValues(-1);
 
+    for (int i = 0; i < NumRocks; ++i)
+    {
+        Grid(rocks[i]) = i;
+        RockPos.push_back(rocks[i]);
+    }
+}
+
+void ROCKSAMPLE::Init_7_4()
+{
+    // Equivalent to RockSample_7_8.pomdpx
+    cout << "Using special layout for rocksample(7, 8)" << endl;
+
+    COORD rocks[] =
+    {
+        COORD(1, 1),
+        COORD(6, 2),
+        COORD(5, 4),
+        COORD(4, 6),
+    };
+
+    HalfEfficiencyDistance = 5;
+    StartPos = COORD(0, 2);
+    Grid.SetAllValues(-1);
+    for (int i = 0; i < NumRocks; ++i)
+    {
+        Grid(rocks[i]) = i;
+        RockPos.push_back(rocks[i]);
+    }
+}
+
+void ROCKSAMPLE::Init_12_4()
+{
+    // this special case has rocks only on the left part of the map
+    cout << "Using special layout for rocksample(12, 4)" << endl;
+
+    COORD rocks[4];
+    for (int i = 0; i < 4; i++) {
+        rocks[i] = COORD(random_state() % 6, random_state() % 12);
+        for (int j = 0; j < i; j++) {
+            if (rocks[i] == rocks[j]) {
+                --i;
+                break;
+            }
+        }
+    }
+
+    HalfEfficiencyDistance = 5;
+    // random starting point in the first half
+    StartPos = COORD(0, random_state() % 12);
+    Grid.SetAllValues(-1);
+    for (int i = 0; i < NumRocks; ++i)
+    {
+        Grid(rocks[i]) = i;
+        RockPos.push_back(rocks[i]);
+    }
+}
+
+void ROCKSAMPLE::Init_24_4()
+{
+    // this special case has rocks only on the left part of the map
+    cout << "Using special layout for rocksample(12, 4)" << endl;
+
+    COORD rocks[4];
+    for (int i = 0; i < 4; i++) {
+        rocks[i] = COORD(random_state() % 24, random_state() % 24);
+        for (int j = 0; j < i; j++) {
+            if (rocks[i] == rocks[j]) {
+                --i;
+                break;
+            }
+        }
+    }
+
+    HalfEfficiencyDistance = 5;
+    // random starting point in the first half
+    StartPos = COORD(0, random_state() % 24);
+    Grid.SetAllValues(-1);
+    for (int i = 0; i < NumRocks; ++i)
+    {
+        Grid(rocks[i]) = i;
+        RockPos.push_back(rocks[i]);
+    }
+}
+
+void ROCKSAMPLE::Init_24_8()
+{
+    // this special case has rocks only on the left part of the map
+    cout << "Using special layout for rocksample(12, 4)" << endl;
+
+    COORD rocks[8];
+    for (int i = 0; i < 8; i++) {
+        rocks[i] = COORD(random_state() % 24, random_state() % 24);
+        for (int j = 0; j < i; j++) {
+            if (rocks[i] == rocks[j]) {
+                --i;
+                break;
+            }
+        }
+    }
+
+    HalfEfficiencyDistance = 5;
+    // random starting point in the first half
+    StartPos = COORD(0, random_state() % 24);
+    Grid.SetAllValues(-1);
     for (int i = 0; i < NumRocks; ++i)
     {
         Grid(rocks[i]) = i;
@@ -117,6 +349,7 @@ void ROCKSAMPLE::Init_11_11()
     };
 
     HalfEfficiencyDistance = 20;
+    //HalfEfficiencyDistance = 2;
     StartPos = COORD(0, 5);
     Grid.SetAllValues(-1);
     for (int i = 0; i < NumRocks; ++i)
@@ -126,6 +359,38 @@ void ROCKSAMPLE::Init_11_11()
     }
 }
 
+void ROCKSAMPLE::Init_15_15()
+{
+    cout << "Using special layout for rocksample(15, 15)" << endl;
+
+    COORD rocks[] =
+    {
+        COORD(0, 4),
+        COORD(0, 11),
+        COORD(1, 8),
+        COORD(2, 4),
+        COORD(2, 12),
+        COORD(3, 9),
+        COORD(4, 3),
+        COORD(5, 14),
+        COORD(6, 0),
+        COORD(6, 8),
+        COORD(9, 3),
+        COORD(10, 2),
+        COORD(11, 7),
+        COORD(12, 12),
+        COORD(14, 9)
+    };
+
+    HalfEfficiencyDistance = 20;
+    //HalfEfficiencyDistance = 2;
+    StartPos = COORD(0, 7);
+    Grid.SetAllValues(-1);
+    for (int i = 0; i < NumRocks; ++i) {
+        Grid(rocks[i]) = i;
+        RockPos.push_back(rocks[i]);
+    }
+}
 
 STATE* ROCKSAMPLE::Copy(const STATE& state) const
 {
@@ -146,19 +411,38 @@ STATE* ROCKSAMPLE::CreateStartState() const
     ROCKSAMPLE_STATE* rockstate = MemoryPool.Allocate();
     rockstate->AgentPos = StartPos;
     rockstate->Rocks.clear();
-    for (int i = 0; i < NumRocks; i++)
-    {
-        ROCKSAMPLE_STATE::ENTRY entry;
-        entry.Collected = false;
-        entry.Valuable = Bernoulli(0.5);
-        entry.Count = 0;
-        entry.Measured = 0;
-        entry.ProbValuable = 0.5;
-        entry.LikelihoodValuable = 1.0;
-        entry.LikelihoodWorthless = 1.0;
-        rockstate->Rocks.push_back(entry);
+
+    if (has_fixed_belief) {
+        for (int i = 0; i < NumRocks; i++)
+        {
+            ROCKSAMPLE_STATE::ENTRY entry;
+            entry.Collected = false;
+            entry.Valuable = unif_dist(random_state) <= fixed_belief[i];
+            entry.Count = 0;
+            entry.Measured = 0;
+            entry.ProbValuable = 0.5;
+            entry.LikelihoodValuable = 1.0;
+            entry.LikelihoodWorthless = 1.0;
+            rockstate->Rocks.push_back(entry);
+        }
+        rockstate->Target = SelectTarget(*rockstate);
     }
-    rockstate->Target = SelectTarget(*rockstate);
+    else {
+        for (int i = 0; i < NumRocks; i++)
+        {
+            ROCKSAMPLE_STATE::ENTRY entry;
+            entry.Collected = false;
+            entry.Valuable = unif_dist(random_state) <= 0.5;
+            entry.Count = 0;
+            entry.Measured = 0;
+            entry.ProbValuable = 0.5;
+            entry.LikelihoodValuable = 1.0;
+            entry.LikelihoodWorthless = 1.0;
+            rockstate->Rocks.push_back(entry);
+        }
+
+        rockstate->Target = SelectTarget(*rockstate);
+    }
     return rockstate;
 }
 
@@ -170,7 +454,7 @@ void ROCKSAMPLE::FreeState(STATE* state) const
 
 // return true if the state is final
 bool ROCKSAMPLE::Step(STATE& state, int action,
-    int& observation, double& reward) const
+    observation_t& observation, double& reward) const
 {
     ROCKSAMPLE_STATE& rockstate = safe_cast<ROCKSAMPLE_STATE&>(state);
     reward = 0;
@@ -240,7 +524,7 @@ bool ROCKSAMPLE::Step(STATE& state, int action,
         rockstate.Rocks[rock].Measured++;
 
         double distance = COORD::EuclideanDistance(rockstate.AgentPos, RockPos[rock]);
-    	double efficiency = (1 + pow(2, -distance / HalfEfficiencyDistance)) * 0.5;
+        double efficiency = (1 + pow(2, -distance / HalfEfficiencyDistance)) * 0.5;
 
         if (observation == E_GOOD)
         {
@@ -254,24 +538,58 @@ bool ROCKSAMPLE::Step(STATE& state, int action,
             rockstate.Rocks[rock].Count--;
             rockstate.Rocks[rock].LikelihoodWorthless *= efficiency;
             rockstate.Rocks[rock].LikelihoodValuable *= 1.0 - efficiency;
-		}
-		double denom = (0.5 * rockstate.Rocks[rock].LikelihoodValuable) +
-			(0.5 * rockstate.Rocks[rock].LikelihoodWorthless);
-		rockstate.Rocks[rock].ProbValuable = (0.5 * rockstate.Rocks[rock].LikelihoodValuable) / denom;
+        }
+        double denom = (0.5 * rockstate.Rocks[rock].LikelihoodValuable) +
+            (0.5 * rockstate.Rocks[rock].LikelihoodWorthless);
+        rockstate.Rocks[rock].ProbValuable = (0.5 * rockstate.Rocks[rock].LikelihoodValuable) / denom;
     }
 
     if (rockstate.Target < 0 || rockstate.AgentPos == RockPos[rockstate.Target])
         rockstate.Target = SelectTarget(rockstate);
 
-    assert(reward != -100);
+    //assert(reward != -100);
     return false;
+}
+
+/*
+ * explore unlikely scenarios
+ */
+bool ROCKSAMPLE::Step(const VNODE *const mcts_root, STATE &state, int action, 
+        observation_t& observation, double& reward, double min, double max) const
+{
+    // consider only the check actions
+    if (action <= E_SAMPLE)
+        return Step(state, action, observation, reward);
+
+    const auto &qnode = mcts_root->Child(action);
+
+    for (int i = 0; i < NumObservations; i++) {
+        const VNODE *vnode = qnode.Child(i);
+
+        if (!vnode || vnode->Beliefs().Empty())
+            continue;
+
+        const auto &meta = dynamic_cast<const ROCKSAMPLE_METAINFO &>(
+            vnode->Beliefs().get_metainfo());
+        int rock = action - E_SAMPLE - 1;
+        double prob = meta.get_prob_valuable(rock);
+        if (prob > min && prob < max) {
+            std::cout << "ROCK " << rock << " PROB " << prob << " FORCE OBSERVATION " << i << std::endl;
+            reward = 0.0;
+            observation = i;
+            return false;
+        }
+    }
+
+    // default behavior
+    return Step(state, action, observation, reward);
 }
 
 bool ROCKSAMPLE::LocalMove(STATE& state, const HISTORY& history,
     int stepObs, const STATUS& status) const
 {
     ROCKSAMPLE_STATE& rockstate = safe_cast<ROCKSAMPLE_STATE&>(state);
-    int rock = Random(NumRocks);
+    int rock = random_state() % NumRocks;
     rockstate.Rocks[rock].Valuable = !rockstate.Rocks[rock].Valuable;
 
     if (history.Back().Action > E_SAMPLE) // check rock
@@ -318,6 +636,154 @@ void ROCKSAMPLE::GenerateLegal(const STATE& state, const HISTORY& history,
     for (rock = 0; rock < NumRocks; ++rock)
         if (!rockstate.Rocks[rock].Collected)
             legal.push_back(rock + 1 + E_SAMPLE);
+}
+
+void ROCKSAMPLE::GenerateFromRules(const STATE& state, const BELIEF_STATE &belief,
+    vector<int>& actions, const STATUS& status) const
+{
+    const ROCKSAMPLE_STATE& rs = safe_cast<const ROCKSAMPLE_STATE&>(state);
+
+    Clingo::SymbolVector externals;
+
+    // OBSERVABLE
+    int min_rock = -1, min_dist = 100000;
+    int max_rock = -1, max_dist = 0;
+    int num_sampled = 0;
+    for (int i = 0; i < RockPos.size(); i++) {
+        int dist = COORD::ManhattanDistance(rs.AgentPos, RockPos[i]);
+        externals.push_back(Clingo::Function(
+            "dist",
+            {Clingo::Number(i), Clingo::Number(dist)}));
+        externals.push_back(Clingo::Function(
+            "delta_x",
+            {Clingo::Number(i), Clingo::Number(RockPos[i].X - rs.AgentPos.X)}));
+
+        externals.push_back(Clingo::Function(
+            "delta_y",
+            {Clingo::Number(i), Clingo::Number(RockPos[i].Y - rs.AgentPos.Y)}));
+
+        if (rs.Rocks[i].Collected) {
+            externals.push_back(Clingo::Function(
+                        "sampled", {Clingo::Number(i)}));
+            num_sampled++;
+        }
+        else {
+            if (dist < min_dist) {
+                min_dist = dist;
+                min_rock = i;
+            }
+            if (dist > max_dist) {
+                max_dist = dist;
+                max_rock = i;
+            }
+        }
+    }
+
+    if (min_rock != -1) {
+        externals.push_back(
+            Clingo::Function("min_dist", {Clingo::Number(min_rock)}));
+    }
+    if (max_rock != -1) {
+        externals.push_back(
+            Clingo::Function("max_dist", {Clingo::Number(max_rock)}));
+    }
+
+    int num_sampled_percentage = (num_sampled/NumRocks) * 100;
+    num_sampled_percentage = num_sampled_percentage - (num_sampled_percentage % 25);
+    externals.push_back(
+        Clingo::Function("num_sampled", {Clingo::Number(num_sampled_percentage)}));
+
+    int best_rock = -1;
+    double best_guess = -1.0;
+    int worst_rock = -1;
+    double worst_guess = 2.0;
+    for (int i = 0; i < RockPos.size(); i++) {
+        const auto& meta =
+            dynamic_cast<const ROCKSAMPLE_METAINFO&>(belief.get_metainfo());
+
+        // Belief on root, likelyhood otherwise
+        /*
+        double real_val = belief.Empty()
+                              ? meta.get_prob_valuable(i)
+                              : rs.Rocks[i].LikelihoodValuable;
+        */
+        double real_val = rs.Rocks[i].ProbValuable;
+        // prob arrotondata
+        int val = real_val * 100;
+        val = val - (val % 10);
+        externals.push_back(Clingo::Function(
+            "guess", {Clingo::Number(i), Clingo::Number(val)}));
+
+        if (real_val > best_guess) {
+            best_guess = real_val;
+            best_rock = i;
+        }
+        if (real_val < worst_guess) {
+            worst_guess = real_val;
+            worst_rock = i;
+        }
+    }
+
+
+    externals.push_back(Clingo::Function("best_guess", {Clingo::Number(best_rock)}));
+    externals.push_back(Clingo::Function("worst_guess", {Clingo::Number(worst_rock)}));
+
+    // assign externals
+    for (auto s : externals) {
+            clingo_control.assign_external(s, Clingo::TruthValue::True);
+    }
+
+#if 0
+    cout << "--------------------" << endl;
+    cout << "total " << clingo_control.symbolic_atoms().length() << endl;
+    for (auto &s : clingo_control.symbolic_atoms()) {
+        cout << s.symbol().to_string()
+            << " ext:" << s.is_external()
+            << " pos:" << s.symbol().is_positive()
+            << " neg:" << s.symbol().is_negative()
+            << endl;
+
+    }
+    cout << "--------------------" << endl;
+#endif
+
+    bool empty = true;
+    for (auto &m : clingo_control.solve()) {
+        for (auto &atom : m.symbols()) {
+            // print
+            empty = false;
+            //cout << atom << " ";
+
+            if (strcmp(atom.name(), "north") == 0)
+                actions.push_back(COORD::E_NORTH);
+
+            else if (strcmp(atom.name(), "east") == 0 ||
+                     strcmp(atom.name(), "exit") == 0)
+                actions.push_back(COORD::E_EAST);
+
+            else if (strcmp(atom.name(), "south") == 0)
+                actions.push_back(COORD::E_SOUTH);
+            else if (strcmp(atom.name(), "west") == 0)
+                actions.push_back(COORD::E_WEST);
+            else if (strcmp(atom.name(), "sample") == 0)
+                actions.push_back(E_SAMPLE);
+            else if (strcmp(atom.name(), "check") == 0) {
+                int n = atom.arguments()[0].number();
+                actions.push_back(E_SAMPLE + n + 1);
+            }
+        }
+    }
+
+    /*
+    if (!empty)
+        cout << endl;
+    */
+
+    // release externals
+    for (auto s: externals) {
+            //clingo_control.release_external(s);
+            clingo_control.assign_external(s, Clingo::TruthValue::False);
+    }
 }
 
 void ROCKSAMPLE::GeneratePreferred(const STATE& state, const HISTORY& history,
@@ -387,8 +853,7 @@ void ROCKSAMPLE::GeneratePreferred(const STATE& state, const HISTORY& history,
     }
 
     // if all remaining rocks seem bad, then head east
-    if (all_bad)
-    {
+    if (all_bad) {
         actions.push_back(COORD::E_EAST);
         return;
     }
@@ -417,7 +882,8 @@ void ROCKSAMPLE::GeneratePreferred(const STATE& state, const HISTORY& history,
             rockstate.Rocks[rock].ProbValuable != 0.0 &&
             rockstate.Rocks[rock].ProbValuable != 1.0 &&
             rockstate.Rocks[rock].Measured < 5 &&
-            std::abs(rockstate.Rocks[rock].Count) < 2) {
+            std::abs(rockstate.Rocks[rock].Count) < 2
+            ) {
             actions.push_back(rock + 1 + E_SAMPLE);
         }
     }
@@ -426,9 +892,9 @@ void ROCKSAMPLE::GeneratePreferred(const STATE& state, const HISTORY& history,
 int ROCKSAMPLE::GetObservation(const ROCKSAMPLE_STATE& rockstate, int rock) const
 {
     double distance = COORD::EuclideanDistance(rockstate.AgentPos, RockPos[rock]);
-    double efficiency = (1 + pow(2, -distance / HalfEfficiencyDistance)) * 0.5;
+    double efficiency = (1.0 + pow(2, -distance/HalfEfficiencyDistance)) * 0.5;
 
-    if (Bernoulli(efficiency))
+    if (unif_dist(random_state) < efficiency)
         return rockstate.Rocks[rock].Valuable ? E_GOOD : E_BAD;
     else
         return rockstate.Rocks[rock].Valuable ? E_BAD : E_GOOD;
@@ -485,7 +951,7 @@ void ROCKSAMPLE::DisplayState(const STATE& state, std::ostream& ostr) const
     ostr << endl;
 }
 
-void ROCKSAMPLE::DisplayObservation(const STATE& state, int observation, std::ostream& ostr) const
+void ROCKSAMPLE::DisplayObservation(const STATE& state, observation_t observation, std::ostream& ostr) const
 {
     switch (observation)
     {
@@ -510,15 +976,29 @@ void ROCKSAMPLE::DisplayAction(int action, std::ostream& ostr) const
         ostr << "Check " << action - E_SAMPLE << endl;
 }
 
-void ROCKSAMPLE::log_problem_info(xes_logger &xes) const {
-    xes.add_attributes({
+void ROCKSAMPLE::log_problem_info() const {
+    XES::logger().add_attributes({
             {"problem", "rocksample"},
-            {"RewardRange", RewardRange}
-            // TODO: extra info...
+            {"RewardRange", RewardRange},
+            {"HalfEfficiencyDistance", HalfEfficiencyDistance},
+            {"Size", Size},
+            {"NumRocks", NumRocks}
         });
+
+    XES::logger().start_list("rocks");
+    for (int i = 0; i < RockPos.size(); i++) {
+        XES::logger().start_list("rock" + std::to_string(i));
+        XES::logger().add_attributes({
+                {"number", i},
+                {"coord x", RockPos[i].X},
+                {"coord y", RockPos[i].Y},
+                });
+        XES::logger().end_list();
+    }
+    XES::logger().end_list(); // end rocks
 }
 
-void ROCKSAMPLE::log_beliefs(const BELIEF_STATE& beliefState, xes_logger &xes) const {
+void ROCKSAMPLE::log_beliefs(const BELIEF_STATE& beliefState) const {
     std::unordered_map<int, int> dist;
     int id;
     for (int i = 0; i < beliefState.GetNumSamples(); i++){
@@ -527,9 +1007,8 @@ void ROCKSAMPLE::log_beliefs(const BELIEF_STATE& beliefState, xes_logger &xes) c
         
         // Compute state id
         id=0;   
-        for (int j = 0; j<rockstate.Rocks.size(); j++) 
-        {
-            id+=rockstate.Rocks[j].Valuable*(pow(2,j));
+        for (int j = 0; j<rockstate.Rocks.size(); j++) {
+            id += rockstate.Rocks[j].Valuable ? pow2(j) : 0;
         }
         // If it is not in dist then add it and initialize to 1
         if (dist.find(id) == dist.end())
@@ -540,100 +1019,178 @@ void ROCKSAMPLE::log_beliefs(const BELIEF_STATE& beliefState, xes_logger &xes) c
 
     const STATE* state = beliefState.GetSample(0);
     const auto& rs = safe_cast<const ROCKSAMPLE_STATE&>(*state);
-    xes.add_attribute({"coord x", rs.AgentPos.X });
-    xes.add_attribute({"coord y", rs.AgentPos.Y });
-    xes.start_list("belief");
+    XES::logger().add_attribute({"coord x", rs.AgentPos.X });
+    XES::logger().add_attribute({"coord y", rs.AgentPos.Y });
+    XES::logger().start_list("belief");
     for (const auto &[k, v] : dist)
-        xes.add_attribute({std::to_string(k), v});
-    xes.end_list();
+        XES::logger().add_attribute({std::to_string(k), v});
+    XES::logger().end_list();
 }
 
-void ROCKSAMPLE::log_state(const STATE& state, xes_logger &xes) const {
+void ROCKSAMPLE::log_state(const STATE& state) const {
     const ROCKSAMPLE_STATE& rs = safe_cast<const ROCKSAMPLE_STATE&>(state);
-    xes.start_list("state");
-    xes.add_attribute({"coord x", rs.AgentPos.X });
-    xes.add_attribute({"coord y", rs.AgentPos.Y });
-    xes.start_list("rocks");
+    XES::logger().start_list("state");
+    XES::logger().add_attribute({"coord x", rs.AgentPos.X });
+    XES::logger().add_attribute({"coord y", rs.AgentPos.Y });
+    XES::logger().start_list("rocks");
     int i = 0;
     for (const auto &r : rs.Rocks) {
-        xes.start_list("rock");
-        xes.add_attributes({
+        XES::logger().start_list("rock");
+        XES::logger().add_attributes({
                 {"number", i},
                 {"valuable", r.Valuable},
                 {"collected", r.Collected}
                 });
-        xes.end_list();
+        XES::logger().end_list();
         ++i;
     }
-    xes.end_list(); // end rocks
-    xes.end_list(); // end state
+    XES::logger().end_list(); // end rocks
+    XES::logger().end_list(); // end state
 }
 
-void ROCKSAMPLE::log_action(int action, xes_logger &xes) const {
+void ROCKSAMPLE::log_action(int action) const {
     switch (action) {
         case COORD::E_EAST:
-            xes.add_attribute({"action", "east"});
+            XES::logger().add_attribute({"action", "east"});
             return;
 
         case COORD::E_NORTH:
-            xes.add_attribute({"action", "north"});
+            XES::logger().add_attribute({"action", "north"});
             return;
 
         case COORD::E_SOUTH:
-            xes.add_attribute({"action", "south"});
+            XES::logger().add_attribute({"action", "south"});
             return;
 
         case COORD::E_WEST:
-            xes.add_attribute({"action", "west"});
+            XES::logger().add_attribute({"action", "west"});
             return;
         case E_SAMPLE:
-            xes.add_attribute({"action", "sample"});
+            XES::logger().add_attribute({"action", "sample"});
             return;
         default:
             int rock = action - E_SAMPLE - 1;
-            xes.add_attribute({"action", "check " + std::to_string(rock)});
+            XES::logger().add_attribute({"action", "check " + std::to_string(rock)});
             return;
     }
 }
 
-void ROCKSAMPLE::log_observation(const STATE& state, int observation, xes_logger &xes) const {
+void ROCKSAMPLE::log_observation(const STATE& state, observation_t observation) const {
     switch (observation) {
         case E_NONE:
-            xes.add_attribute({"observation", "none"});
+            XES::logger().add_attribute({"observation", "none"});
             return;
         case E_GOOD:
-            xes.add_attribute({"observation", "good"});
+            XES::logger().add_attribute({"observation", "good"});
             return;
         case E_BAD:
-            xes.add_attribute({"observation", "bad"});
+            XES::logger().add_attribute({"observation", "bad"});
             return;
     }
 }
 
-void ROCKSAMPLE::log_reward(double reward, xes_logger &xes) const {
-    xes.add_attribute({"reward", reward});
+void ROCKSAMPLE::log_reward(double reward) const {
+    XES::logger().add_attribute({"reward", reward});
+}
+
+void ROCKSAMPLE::set_belief_metainfo(VNODE *v, const SIMULATOR &) const {
+    v->Beliefs().set_metainfo(ROCKSAMPLE_METAINFO(NumRocks), *this);
 }
 
 void ROCKSAMPLE::pre_shield(const BELIEF_STATE &belief, std::vector<int> &legal_actions) const {
     const STATE* state = belief.GetSample(0);
     const auto& rs = safe_cast<const ROCKSAMPLE_STATE&>(*state);
+    const auto& meta =
+        dynamic_cast<const ROCKSAMPLE_METAINFO&>(belief.get_metainfo());
 
-    // forbidden position (3, 3)
-    if (rs.AgentPos.X != 2 && rs.AgentPos.Y != 3)
-        legal_actions.push_back(COORD::E_EAST);
-    if (rs.AgentPos.X != 3 && rs.AgentPos.Y != 2)
-        legal_actions.push_back(COORD::E_NORTH);
-    if (rs.AgentPos.X != 3 && rs.AgentPos.Y != 4)
+    // moving is always legal
+    if (rs.AgentPos.Y - 1 >= 0)
         legal_actions.push_back(COORD::E_SOUTH);
-    if (rs.AgentPos.X != 4 && rs.AgentPos.Y != 2)
+    if (rs.AgentPos.Y + 1 < Size)
+        legal_actions.push_back(COORD::E_NORTH);
+    if (rs.AgentPos.X - 1 >= 0)
         legal_actions.push_back(COORD::E_WEST);
+    legal_actions.push_back(COORD::E_EAST);
                
-    // sample is always legal
-    legal_actions.push_back(E_SAMPLE);
-
-    // sample is always legal
+    // checks are always legal
     for (int rock = 0; rock < NumRocks; ++rock) {
         int action = E_SAMPLE + 1 + rock;
         legal_actions.push_back(action);
+    }
+
+    // only sample if safe
+    int rock = Grid(rs.AgentPos);
+    if (rock >= 0 && !rs.Rocks[rock].Collected) {
+        double p = meta.get_prob_valuable(rock);
+        if (p >= sample_shield_tr)
+            legal_actions.push_back(E_SAMPLE);
+        else if (sampling_points.is_in_threshold({p}))
+            legal_actions.push_back(E_SAMPLE);
+    }
+}
+
+Classification ROCKSAMPLE::check_rule(const BELIEF_META_INFO &m, int a, double t) const {
+    const ROCKSAMPLE_METAINFO &meta = safe_cast<const ROCKSAMPLE_METAINFO &>(m);
+
+    int rock = -1;
+    COORD coord(meta.x(), meta.y());
+    for (int i = 0; i < NumRocks; ++i)
+    {
+        if (coord == RockPos[i]) {
+            rock = i;
+            break;
+        }
+    }
+
+    if (a == E_SAMPLE) {
+        if ( rock >= 0 && !meta.collected(rock) && meta.get_prob_valuable(rock) >= t)
+            return TRUE_POSITIVE; // the rule correctly describes the action
+        else
+            return FALSE_NEGATIVE; // the rule should have described this action
+    }
+    else {
+        if (rock == -1 || meta.collected(rock) || meta.get_prob_valuable(rock) < t)
+            return TRUE_NEGATIVE; // the rule correctly avoid sampling
+        else
+            return FALSE_POSITIVE; // the rule falsely describe this action
+    }
+}
+
+void ROCKUPDATER::update() {
+    setup.randomize();
+    assert(setup.is_valid());
+    if (real)
+        real->update(setup);
+    if (sim)
+        sim->update(setup);
+}
+
+void RANDOM_ROCKSAMPLE::log_run_info() const {
+    XES::logger().start_list("rocks");
+    for (int i = 0; i < RockPos.size(); i++) {
+        XES::logger().start_list("rock" + std::to_string(i));
+        XES::logger().add_attributes({
+                {"number", i},
+                {"coord x", RockPos[i].X},
+                {"coord y", RockPos[i].Y},
+                });
+        XES::logger().end_list();
+    }
+    XES::logger().end_list(); // end rocks
+}
+
+void RANDOM_ROCKSAMPLE::log_problem_info() const {
+    XES::logger().add_attributes({
+            {"problem", "rocksample"},
+            {"RewardRange", RewardRange},
+            {"HalfEfficiencyDistance", HalfEfficiencyDistance},
+            {"Size", Size},
+            {"NumRocks", NumRocks}
+        });
+}
+
+void RANDOM_ROCKSAMPLE::pre_run() {
+    if (updater) {
+        updater->update();
     }
 }

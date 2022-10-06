@@ -17,14 +17,14 @@ class TEST_SIMULATOR : public SIMULATOR
 {
 public:
 
-    TEST_SIMULATOR(int actions, int observations, int maxDepth)
+    TEST_SIMULATOR(int actions, observation_t observations, int maxDepth)
     :   SIMULATOR(actions, observations),
         MaxDepth(maxDepth)
     { }
 
     virtual STATE* CreateStartState() const;
     virtual bool Step(STATE& state, int action, 
-        int& observation, double& reward) const;
+        observation_t& observation, double& reward) const;
     virtual STATE* Copy(const STATE& state) const;
     virtual void FreeState(STATE* state) const;
 
