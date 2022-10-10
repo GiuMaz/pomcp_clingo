@@ -48,6 +48,7 @@ int main(int argc, char *argv[]) {
 
     double W = 0.0;
     bool complex_shield = false, xes_log = true;
+    std::string asp_file = "";
 
     options_description desc("Allowed options");
     desc.add_options()
@@ -85,6 +86,7 @@ int main(int argc, char *argv[]) {
         ("complexshield", value<bool>(&complex_shield), "Use complex shield (if supported)")
         ("shieldfile", value<std::string>(&shield_file), "Specify file with shield parameters")
         ("setW", value<double>(&W), "Fix the reward range (testing purpouse)")
+        ("asp", value<string>(&asp_file), "asp rule")
         ("xes", value<bool>(&xes_log)->default_value(true), "Enable XES log");
 
     variables_map vm;
@@ -173,8 +175,8 @@ int main(int argc, char *argv[]) {
         vector<int> stops;
         for (int i = distance; i < l; i+=distance)
             stops.push_back(i);
-        real = new CLOSE_BATTERY(l, stops);
-        simulator = new CLOSE_BATTERY(l, stops);
+        real = new CLOSE_BATTERY(l, stops, "");
+        simulator = new CLOSE_BATTERY(l, stops, asp_file);
 
         cb_upd.set_sims((CLOSE_BATTERY *)real,(CLOSE_BATTERY *)simulator);
         dynamic_cast<CLOSE_BATTERY*>(real)->set_updater(&cb_upd);

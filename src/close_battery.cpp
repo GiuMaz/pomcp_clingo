@@ -8,7 +8,7 @@
 using namespace std;
 using namespace UTILS;
 
-CLOSE_BATTERY::CLOSE_BATTERY(int l, std::vector<int> s)
+CLOSE_BATTERY::CLOSE_BATTERY(int l, std::vector<int> s, std::string asp_file)
     : length(l), stops(s), unif_dist(0.0, 1.0) {
     NumActions = 3;
     NumObservations = CLOSE_BATTERY_MAX + 1 + 3;
@@ -23,10 +23,13 @@ CLOSE_BATTERY::CLOSE_BATTERY(int l, std::vector<int> s)
     end_reward = 100.0;
 
     prob_correct_obs = 0.90;
-    prob_open_station = 0.80;
+    //prob_open_station = 0.80;
+    prob_open_station = 1.0;
 
-    clingo_control.load("/home/giulio/Progetti/pomcp_clingo/asp_battery_open.lp");
-    clingo_control.ground({{"base", {}}});
+    if (asp_file != "") {
+        clingo_control.load(asp_file.c_str());
+        clingo_control.ground({{"base", {}}});
+    }
 }
 
 STATE* CLOSE_BATTERY::Copy(const STATE& state) const // Makes a copy of the state state
@@ -499,3 +502,4 @@ int CLOSE_BATTERY::get_tree_count(int action) const {
     if (CB_ACTION_RECHARGE)
         return recharge_w * base_count;
 }
+

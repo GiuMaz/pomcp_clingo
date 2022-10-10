@@ -88,7 +88,7 @@ enum {
 class CLOSE_BATTERY final: public SIMULATOR
 {
 public:
-    CLOSE_BATTERY(int length, std::vector<int> stops);
+    CLOSE_BATTERY(int length, std::vector<int> stops, std::string asp_file);
 
     virtual STATE* Copy(const STATE& state) const;
     virtual void Validate(const STATE& state) const;
@@ -188,7 +188,9 @@ private:
         setup.clear();
         int i = 0;
         while (i + step < lenght) {
-            i += UTILS::Random(1, step + 1);
+            // TODO (Daniele)
+            // genera prossima stazione, distanza [min, max)
+            i += UTILS::Random(1 /* min (incluso) */, step + 1 /* max (escluso) */);
             setup.push_back(i);
         }
     }
