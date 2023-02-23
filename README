@@ -4,7 +4,7 @@ This is a combination of the POMCP algorithm and ASP reasoning, as presented at 
 # HOW TO RUN
 
 ```
-build/pomcp --problem rocksample --hardcoded=true --size 12 --number 4 --timeout 100000000 --mindouble 15 --maxdouble 15 --runs 50 --xes 1 --rolloutknowledge=1 --treeknowledge=1;
+build/pomcp --problem rocksample --hardcoded=true --size 12 --number 4 --timeout 100000000 --mindouble 15 --maxdouble 15 --runs 50 --xes 1 --rolloutknowledge=1 --treeknowledge=1 --asp $ASP_NAME;
 ```
 
 Main parameters are explained with --help
