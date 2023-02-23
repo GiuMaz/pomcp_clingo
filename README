@@ -1,2 +1,30 @@
 POMCP 1.0
-This is a combination of the POMCP algorithm and the solver clingo.
+This is a combination of the POMCP algorithm and ASP reasoning, as presented at AAMAS'23 conference.
+
+# HOW TO RUN
+
+```
+build/pomcp --problem rocksample --hardcoded=true --size 12 --number 4 --timeout 100000000 --mindouble 15 --maxdouble 15 --runs 50 --xes 1 --rolloutknowledge=1 --treeknowledge=1;
+```
+
+Main parameters are explained with --help
+
+Alternatively, use
+```
+scripts/run_rocksample.sh
+```
+to automate run of experiments (adapt to the specific task)
+
+option "xes" allows to save statistics of runs (including time and discounted / undiscounted return)
+
+# NOTE
+Refer to rocksample code for a more up to date version
+
+# CITATION
+@inproceedings{AAMAS23_pomcp_asp,
+  title={Learning Logic Specifications for Soft Policy Guidance in POMCP},
+  author={Mazzi, Giulio and Meli,Daniele and Castellini, Alberto and Farinelli, Alessandro},
+  booktitle={Proceedings of the 22nd International Conference on Autonomous Agents and Multiagent Systems},
+  pages={in publication},
+  year={2023}
+}

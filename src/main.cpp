@@ -85,8 +85,9 @@ int main(int argc, char *argv[]) {
         ("useshield", value<bool>(&searchParams.use_shield), "Use preshield (if supported)")
         ("complexshield", value<bool>(&complex_shield), "Use complex shield (if supported)")
         ("shieldfile", value<std::string>(&shield_file), "Specify file with shield parameters")
+        ("hardcoded", value<bool>(&knowledge.UseHardcoded)->default_value(true), "Use either Clingo or hardcoded rules (faster)")
         ("setW", value<double>(&W), "Fix the reward range (testing purpouse)")
-        ("asp", value<string>(&asp_file), "asp rule")
+        ("asp", value<string>(&asp_file), "asp rule file")
         ("xes", value<bool>(&xes_log)->default_value(true), "Enable XES log");
 
     variables_map vm;
@@ -129,11 +130,11 @@ int main(int argc, char *argv[]) {
         real = new NETWORK(size, number);
         simulator = new NETWORK(size, number);
     } else if (problem == "rocksample") {
-        real = new ROCKSAMPLE(size, number);
+        real = new ROCKSAMPLE(size, number, asp_file);
         if (searchParams.use_shield)
-            simulator = new ROCKSAMPLE(size, number, shield_file);
+            simulator = new ROCKSAMPLE(size, number, shield_file, true);
         else
-            simulator = new ROCKSAMPLE(size, number);
+            simulator = new ROCKSAMPLE(size, number, asp_file);
     } else if (problem == "random_rocksample") {
         real = new RANDOM_ROCKSAMPLE(size, number);
         simulator = new RANDOM_ROCKSAMPLE(size, number);

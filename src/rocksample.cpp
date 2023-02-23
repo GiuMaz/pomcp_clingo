@@ -9,7 +9,7 @@
 using namespace std;
 using namespace UTILS;
 
-ROCKSAMPLE::ROCKSAMPLE(int size, int rocks)
+ROCKSAMPLE::ROCKSAMPLE(int size, int rocks, std::string asp_file)
 :   Grid(size, size),
     Size(size),
     NumRocks(rocks),
@@ -42,8 +42,18 @@ ROCKSAMPLE::ROCKSAMPLE(int size, int rocks)
         InitGeneral();
 
     // Load asp program with rules
-    clingo_control.load("/home/giulio/Progetti/pomcp_clingo/asp_test_rocksample_neg_ex_2.lp");
-    clingo_control.ground({{"base", {}}});
+    if (asp_file != ""){
+        clingo_control.load(asp_file.c_str());
+
+    
+        std::ostringstream dist_const;
+        dist_const << "#const max_range_dist=" << Clingo::Number(size) << ".";
+        clingo_control.add("base", {}, dist_const.str().c_str());  
+        std::ostringstream rock_const;
+        rock_const << "#const num_rocks=" << Clingo::Number(rocks) << ".";
+        clingo_control.add("base", {}, rock_const.str().c_str());  
+        clingo_control.ground({{"base", {}}});
+    }
 
 }
 
@@ -84,11 +94,11 @@ ROCKSAMPLE::ROCKSAMPLE(int size, int rocks, int x, int y,
     StartPos = COORD(x, y);
 
     // Load asp program with rules
-    clingo_control.load("/home/giulio/Progetti/pomcp_clingo/asp_test_rocksample_neg_ex_2.lp");
+    clingo_control.load("/home/daniele/Documents/pomcp_clingo_orig/asp_test_rocksample_neg_ex_2.lp");
     clingo_control.ground({{"base", {}}});
 }
 
-ROCKSAMPLE::ROCKSAMPLE(int size, int rocks, std::string shield_file)
+ROCKSAMPLE::ROCKSAMPLE(int size, int rocks, std::string shield_file, bool use_shield)
 :   Grid(size, size),
     Size(size),
     NumRocks(rocks),
@@ -141,7 +151,7 @@ ROCKSAMPLE::ROCKSAMPLE(int size, int rocks, std::string shield_file)
     sampling_points.set_points(points);
 
     // Load asp program with rules
-    clingo_control.load("/home/giulio/Progetti/pomcp_clingo/asp_test_rocksample_neg_ex_2.lp");
+    clingo_control.load("/home/daniele/Documents/pomcp_clingo_orig/asp_test_rocksample_neg_ex_2.lp");
     clingo_control.ground({{"base", {}}});
 }
 
@@ -432,6 +442,8 @@ STATE* ROCKSAMPLE::CreateStartState() const
         {
             ROCKSAMPLE_STATE::ENTRY entry;
             entry.Collected = false;
+            // if (i<2) entry.Valuable = true;
+            // else entry.Valuable = false;
             entry.Valuable = unif_dist(random_state) <= 0.5;
             entry.Count = 0;
             entry.Measured = 0;
@@ -633,9 +645,10 @@ void ROCKSAMPLE::GenerateLegal(const STATE& state, const HISTORY& history,
     if (rock >= 0 && !rockstate.Rocks[rock].Collected)
         legal.push_back(E_SAMPLE);
 
-    for (rock = 0; rock < NumRocks; ++rock)
+    for (rock = 0; rock < NumRocks; ++rock){
         if (!rockstate.Rocks[rock].Collected)
             legal.push_back(rock + 1 + E_SAMPLE);
+    }
 }
 
 void ROCKSAMPLE::GenerateFromRules(const STATE& state, const BELIEF_STATE &belief,
@@ -784,6 +797,79 @@ void ROCKSAMPLE::GenerateFromRules(const STATE& state, const BELIEF_STATE &belie
             //clingo_control.release_external(s);
             clingo_control.assign_external(s, Clingo::TruthValue::False);
     }
+}
+
+
+
+void ROCKSAMPLE::GenerateFromRulesHardcoded15(const STATE& state, const BELIEF_STATE &belief,
+    vector<int>& actions, const STATUS& status) const
+{
+    // cout << "USING HARDCODED RULES" << endl;
+    chrono::steady_clock::time_point start = chrono::steady_clock::now();
+    const ROCKSAMPLE_STATE& rs = safe_cast<const ROCKSAMPLE_STATE&>(state);
+
+    std::vector<Target> targets;
+    int min_rock = -1, min_dist = 100000;
+    int max_rock = -1, max_dist = 0;
+    int num_sampled = 0;
+    double real_val;
+    int val, dist;
+    for (int i=0; i<NumRocks; ++i){
+        real_val = rs.Rocks[i].ProbValuable;
+        val = real_val * 100;
+        val = val - (val % 10);
+        dist = COORD::ManhattanDistance(rs.AgentPos, RockPos[i]);
+        
+        if (rs.Rocks[i].Collected){
+            num_sampled++;
+        }
+        //target
+        else {
+            if (dist<=0 && val<=80) actions.push_back(E_SAMPLE + i + 1); //check valid
+            if ((val>=70 && val<=80) || dist<=1){
+                Target target;
+                target.val = val;
+                target.dist = dist;
+                target.rock = i;
+                target.X = RockPos[i].X;
+                target.Y = RockPos[i].Y;
+                targets.push_back(target);
+            }
+        }
+    }
+    sort(targets.begin(), targets.end(), compare_targets);
+    for (auto i=0; i<targets.size(); ++i)
+    {
+        Target best_target = targets[i];
+        if (best_target.val>=90 and best_target.dist<=0) actions.push_back(E_SAMPLE); //sample valid
+        if (best_target.val<=50) actions.push_back(E_SAMPLE + best_target.rock + 1); //check valid
+        if (best_target.X - rs.AgentPos.X >= 1) actions.push_back(COORD::E_EAST); //east valid
+        if (best_target.X - rs.AgentPos.X <= -1) actions.push_back(COORD::E_WEST); //west valid
+        if (best_target.Y - rs.AgentPos.Y >= 1) actions.push_back(COORD::E_NORTH); //north valid
+        if (best_target.Y - rs.AgentPos.Y <= -1) actions.push_back(COORD::E_SOUTH); //south valid
+
+        if (!(i+1<targets.size() && targets[i+1].dist == targets[i].dist && targets[i+1].val == targets[i].val)) break; 
+    }
+
+    //exit (COMMENT FOR AAMAS RESULTS)
+    double num_rocks_double = NumRocks;
+    int num_sampled_percentage = (num_sampled/num_rocks_double) * 100;
+    num_sampled_percentage = num_sampled_percentage - (num_sampled_percentage % 25);
+    if (num_sampled_percentage >= 25){
+        for (int i=0; i<NumRocks; ++i){
+            real_val = rs.Rocks[i].ProbValuable;
+            val = real_val * 100;
+            val = val - (val % 10);
+            dist = COORD::ManhattanDistance(rs.AgentPos, RockPos[i]);
+            
+            if (!rs.Rocks[i].Collected){
+                if ((val<=40) || (dist<=8 && dist >=5)) actions.push_back(COORD::E_EAST);
+                break;
+            }
+        }
+    }
+
+
 }
 
 void ROCKSAMPLE::GeneratePreferred(const STATE& state, const HISTORY& history,

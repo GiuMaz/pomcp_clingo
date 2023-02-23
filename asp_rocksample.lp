@@ -5,16 +5,15 @@
 #program base.
 
 
-
 % problem entities
-#const num_rocks=4.
+% #const num_rocks=4
 rock(0..num_rocks-1).
 perc_rocks(0).
 perc_rocks(25).
 perc_rocks(50).
 perc_rocks(75).
 perc_rocks(100).
-ranges_dist(-25..25).
+ranges_dist(-max_range_dist..2*max_range_dist).
 range_guess(0).
 range_guess(10).
 range_guess(20).
@@ -49,7 +48,7 @@ check(V1) :- V2 <= 80; V3 <= 0; dist(V1, V3); guess(V1, V2); not sampled(V1).
 sample(V1) :- V2 >= 90; V3 <= 0; target_sample(V1); dist(V1, V3); guess(V1, V2); not sampled(V1).
 
 %TOTAL EXAMPLES 8487; COUNTEREXAMPLES 2206; OPT EXAMPLES 518
-0{target_sample(V1) : V2 <= 1, dist(V1, V2), not sampled(V1); 
+0{target_sample(V1) : V2 <= 1, dist(V1, V2), not sampled(V1);
 target_sample(V1) : V2 <= 80, V2 >= 70, guess(V1, V2), not sampled(V1)}num_rocks.
 :~ target_sample(V1), dist(V1,V2).[V2@1, V1, V2] 
 :~ target_sample(V1), min_dist(V1).[1@2, V1] 
@@ -71,7 +70,7 @@ exit :- num_sampled(V1); V1 >= 25; V2 <= 8; V2 >= 5; dist(V3, V2); not sampled(V
 %Output in the answer sets
 #show sample/1.
 #show check/1.
-#show exit.
+% #show exit. %UNCOMMENT FOR AAMAS RESULTS
 #show south/1.
 #show west/1.
 #show east/1.

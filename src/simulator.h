@@ -68,6 +68,7 @@ public:
         int SmartTreeCount;
         bool dynamic_tree_count;
         double SmartTreeValue;
+        bool UseHardcoded;
         
         int Level(int phase) const
         {
@@ -165,6 +166,8 @@ public:
 
     // Generate set of preferred actions using a rule-based approach
     virtual void GenerateFromRules(const STATE& state, const BELIEF_STATE &belief, 
+        std::vector<int>& actions, const STATUS& status) const;
+    virtual void GenerateFromRulesHardcoded15(const STATE& state, const BELIEF_STATE &belief, 
         std::vector<int>& actions, const STATUS& status) const;
 
     // For explicit POMDP computation only

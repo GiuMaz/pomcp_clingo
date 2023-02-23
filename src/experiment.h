@@ -14,6 +14,8 @@ struct RESULTS
     void Clear();
 
     STATISTIC Time;
+    STATISTIC TimePerStep;
+    STATISTIC NumSteps;
     STATISTIC Reward;
     STATISTIC DiscountedReturn;
     STATISTIC UndiscountedReturn;
@@ -21,6 +23,8 @@ struct RESULTS
 
 inline void RESULTS::Clear()
 {
+    TimePerStep.Clear();
+    NumSteps.Clear();
     Time.Clear();
     Reward.Clear();
     DiscountedReturn.Clear();

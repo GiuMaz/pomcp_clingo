@@ -172,7 +172,8 @@ class ROCKSAMPLE : public SIMULATOR
 public:
 
     ROCKSAMPLE(int size, int rocks);
-    ROCKSAMPLE(int size, int rocks, std::string file_name);
+    ROCKSAMPLE(int size, int rocks, std::string asp_name);
+    ROCKSAMPLE(int size, int rocks, std::string shield_file, bool use_shield);
     ROCKSAMPLE(int size, int rocks, int x, int y,
                const std::vector<double> &belief);
     //ROCKSAMPLE(const RocksSetup &r);
@@ -191,6 +192,8 @@ public:
     void GeneratePreferred(const STATE& state, const HISTORY& history,
         std::vector<int>& legal, const STATUS& status) const;
     virtual void GenerateFromRules(const STATE& state, const BELIEF_STATE &belief,
+        std::vector<int>& legal, const STATUS& status) const;
+    virtual void GenerateFromRulesHardcoded15(const STATE& state, const BELIEF_STATE &belief,
         std::vector<int>& legal, const STATUS& status) const;
     virtual bool LocalMove(STATE& state, const HISTORY& history,
         int stepObservation, const STATUS& status) const;
@@ -232,6 +235,19 @@ protected:
         E_SAMPLE = 4
     };
 
+    struct Target{
+        int val;
+        int dist;
+        int rock;
+        int X;
+        int Y;
+    };
+
+    static bool compare_targets(Target a, Target b){
+        if (a.dist != b.dist) return a.dist < b.dist;
+        return a.val > b.val;
+    }
+
     void InitGeneral();
     void Init_4_1();
     void Init_7_4();
@@ -267,7 +283,7 @@ class ROCKUPDATER;
 class RANDOM_ROCKSAMPLE : public ROCKSAMPLE {
 public:
     RANDOM_ROCKSAMPLE(int size, int rocks):
-        ROCKSAMPLE(size, rocks) {}
+        ROCKSAMPLE(size, rocks, "") {}
     void update(const ROCKSSETUP &rs);
     virtual void log_run_info() const;
     void log_problem_info() const;

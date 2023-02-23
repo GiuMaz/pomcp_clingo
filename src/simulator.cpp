@@ -69,6 +69,11 @@ void SIMULATOR::GenerateFromRules(const STATE& state, const BELIEF_STATE &belief
 {
 }
 
+void SIMULATOR::GenerateFromRulesHardcoded15(const STATE& state, const BELIEF_STATE &belief, 
+        std::vector<int>& actions, const STATUS& status) const
+{
+}
+
 int SIMULATOR::SelectRandom(const STATE &state, const HISTORY &history,
                             const BELIEF_STATE &belief,
                             const STATUS &status) const {
@@ -77,7 +82,10 @@ int SIMULATOR::SelectRandom(const STATE &state, const HISTORY &history,
     if (Knowledge.RolloutLevel >= KNOWLEDGE::RULES)
     {
         actions.clear();
-        GenerateFromRules(state, belief, actions, status);
+        if (!Knowledge.UseHardcoded)
+            GenerateFromRules(state, belief, actions, status);
+        else
+            GenerateFromRulesHardcoded15(state, belief, actions, status);
         if (!actions.empty())
             return actions[Random(actions.size())];
     }
@@ -159,7 +167,10 @@ void SIMULATOR::Prior(const STATE* state, const HISTORY& history,
             vnode->SetChildren(0, 0);
 
             actions.clear();
-            GenerateFromRules(*state, vnode->Beliefs(), actions, status);
+            if (!Knowledge.UseHardcoded)
+                GenerateFromRules(*state, vnode->Beliefs(), actions, status);
+            else
+                GenerateFromRulesHardcoded15(*state, vnode->Beliefs(), actions, status);
 
             for (auto a : actions) {
                 QNODE& qnode = vnode->Child(a);

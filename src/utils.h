@@ -86,7 +86,7 @@ class Timer {
 public:
     Timer() : start(std::chrono::steady_clock::now()) {}
     double elapsed() const {
-        return std::chrono::duration_cast<std::chrono::seconds>(
+        return std::chrono::duration_cast<std::chrono::nanoseconds>(
                 std::chrono::steady_clock::now() - start).count();
     }
 

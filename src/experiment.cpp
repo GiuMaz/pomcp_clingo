@@ -48,6 +48,7 @@ void EXPERIMENT::Run()
     bool terminal = false;
     bool outOfParticles = false;
     int t;
+    int num_steps = 0;
 
     if (use_fixed_seed) {
         Real.set_seed(real_seed);
@@ -69,8 +70,11 @@ void EXPERIMENT::Run()
         if (XES::enabled()) {
             Simulator.log_beliefs(mcts.BeliefState());
         }
-
+        Timer step_timer;
         int action = mcts.SelectAction();
+        Results.TimePerStep.Add(step_timer.elapsed());
+        num_steps++;
+
 
         terminal = Real.Step(*state, action, observation, reward);
         //cout << "REAL action " <<  action << " observation " << observation << endl;
@@ -107,7 +111,7 @@ void EXPERIMENT::Run()
         if (outOfParticles)
             break;
 
-        if (timer.elapsed() > ExpParams.TimeOut)
+        if (timer.elapsed()*1e-9 > ExpParams.TimeOut)
         {
             cout << "Timed out after " << t << " steps in "
                 << Results.Time.GetTotal() << "seconds" << endl;
@@ -127,7 +131,10 @@ void EXPERIMENT::Run()
             // This passes real state into simulator!
             // SelectRandom must only use fully observable state
             // to avoid "cheating"
+            Timer step_timer;
             int action = Simulator.SelectRandom(*state, history, mcts.BeliefState(), mcts.GetStatus());
+            Results.TimePerStep.Add(step_timer.elapsed());
+            num_steps++;
             terminal = Real.Step(*state, action, observation, reward);
 
             Results.Reward.Add(reward);
@@ -154,6 +161,7 @@ void EXPERIMENT::Run()
     }
 
     Results.Time.Add(timer.elapsed());
+    Results.NumSteps.Add(num_steps);
     Results.UndiscountedReturn.Add(undiscountedReturn);
     Results.DiscountedReturn.Add(discountedReturn);
     cout << "Discounted return = " << discountedReturn
@@ -192,7 +200,7 @@ void EXPERIMENT::MultiRun()
 
         Real.post_run();
 
-        if (Results.Time.GetTotal() > ExpParams.TimeOut)
+        if (Results.Time.GetTotal()*1e-9 > ExpParams.TimeOut)
         {
             cout << "Timed out after " << n << " runs in "
                 << Results.Time.GetTotal() << "seconds" << endl;
@@ -248,9 +256,13 @@ void EXPERIMENT::DiscountedReturn()
                     {"average discounted return", Results.DiscountedReturn.GetMean()},
                     {"average discounted return std",
                     Results.DiscountedReturn.GetStdErr()},
-                    {"average time", Results.Time.GetMean()},
-                    {"average time std", Results.Time.GetStdDev()},
-                    {"total time", Results.Time.GetTotal()}
+                    {"average time", Results.Time.GetMean()*1e-9},
+                    {"average time std", Results.Time.GetStdDev()*1e-9},
+                    {"total time", Results.Time.GetTotal()*1e-9},
+                    {"average num steps", Results.NumSteps.GetMean()},
+                    {"average num steps std", Results.NumSteps.GetStdDev()},
+                    {"average time per step", Results.TimePerStep.GetMean()*1e-9},
+                    {"average time per step std", Results.TimePerStep.GetStdDev()*1e-9},
                     });
         }
 
